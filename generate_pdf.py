@@ -9,9 +9,9 @@ from jinja2 import Environment, FileSystemLoader
 from oauth2client.service_account import ServiceAccountCredentials
 
 # Uncomment this line for Linux or MacOS local environment:
-# WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
+WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 #  For Windows local environment, use the following line instead:
-WKHTMLTOPDF_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+# WKHTMLTOPDF_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
