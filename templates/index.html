@@ -29,6 +29,10 @@
       margin-top: 15px;
       text-align: center;
     }
+    .pdf-button {
+        margin-top: 1vh;
+        width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -46,7 +50,7 @@
 
       <a href="#" class="btn btn-success" id="formButton" style="display:none;" target="_blank" onclick="startObservationReport(event)">Start Observation Report</a>
       <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a>
-      <button class="btn btn-secondary" onclick="generateReport()">Generate PDF Report</button>
+      <button class="btn btn-secondary pdf-button" onclick="generateReport()">Generate PDF Report</button>
 
       <div class="status" id="statusDiv"></div>
     </div>
