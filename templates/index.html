@@ -44,7 +44,7 @@
 
       <div class="obs-number" id="obsNumber">Loading...</div>
 
-      <a href="#" class="btn btn-success" id="formButton" style="display:none;" target="_blank">Start Observation Report</a>
+      <a href="#" class="btn btn-success" id="formButton" style="display:none;" target="_blank" onclick="startObservationReport(event)">Start Observation Report</a>
       <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a>
       <button class="btn btn-secondary" onclick="generateReport()">Generate PDF Report</button>
 
@@ -87,6 +87,30 @@ function updateOBSDisplay() {
       formBtn.style.display = 'inline-block';
     })
     .catch(err => console.error('Error updating OBS display:', err));
+}
+
+function startObservationReport(event) {
+  event.preventDefault();
+  const project = document.getElementById('projectSelect').value;
+  // Get the current OBS number and form URL
+  fetch(`/get_current_obs?project=${encodeURIComponent(project)}`)
+    .then(res => res.json())
+    .then(data => {
+      // Open the form with the current OBS number
+      if (data.form_url) {
+        window.open(data.form_url, '_blank');
+      }
+      // Now increment the OBS number for next time
+      fetch(`/get_next_obs?project=${encodeURIComponent(project)}`)
+        .then(res => res.json())
+        .then(nextData => {
+          // Update the displayed OBS number
+          document.getElementById('obsNumber').textContent = nextData.obs_number;
+        });
+    })
+    .catch(err => {
+      console.error('Error starting observation report:', err);
+    });
 }
 
 function generateReport() {
