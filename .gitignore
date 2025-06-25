@@ -11,3 +11,4 @@ service-account.json
 app_config.json
 .env
 schnurr-app.pem
+debug_*.html
