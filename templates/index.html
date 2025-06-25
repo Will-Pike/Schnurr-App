@@ -21,6 +21,13 @@
       text-align: center;
       margin: 20px 0;
     }
+    .obs-text {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #000000;
+      text-align: center;
+      margin: 20px 0;
+    }
     .btn-primary, .btn-success, .btn-danger {
       width: 100%;
       margin-top: 10px;
@@ -46,10 +53,11 @@
         <select id="projectSelect" class="form-select" onchange="updateOBSDisplay()"></select>
       </div>
 
+      <div class="obs-text">Next OBS Number:</div>
       <div class="obs-number" id="obsNumber">Loading...</div>
 
       <a href="#" class="btn btn-success" id="formButton" style="display:none;" target="_blank" onclick="startObservationReport(event)">Start Observation Report</a>
-      <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a>
+      <!-- <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a> -->
       <button class="btn btn-secondary pdf-button" onclick="generateReport()">Generate PDF Report</button>
 
       <div class="status" id="statusDiv"></div>
