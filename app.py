@@ -127,6 +127,16 @@ def obs_submitted():
         set_current_obs(project, current + 1)
     return jsonify({"success": True})
 
+@app.route('/get_report_count')
+def get_report_count():
+    project = request.args.get('project')
+    if not project or project not in get_projects():
+        return jsonify({"error": "Invalid or missing project"}), 400
+    # Load your sheet and count matching records
+    from generate_pdf import get_report_record_count
+    count = get_report_record_count(project)
+    return jsonify({"count": count})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

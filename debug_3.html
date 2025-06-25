@@ -25,7 +25,16 @@
       margin-bottom: 20px;
       padding-bottom: 10px;
       border-bottom: 2px solid #dee2e6;
+      width: 100%;
     }
+    .report-header .row > div {
+        min-height: 70px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+
+    }
+    
     .obs-number {
       font-size: 2rem;
       font-weight: bold;
@@ -74,9 +83,25 @@
   <div class="container">
     <div class="report-container">
       
-      <div class="report-header">
-        <div class="obs-number">OBS #5</div>
-        <div class="timestamp">6/24/2025 16:24:11</div>
+      <div class="report-header mb-4">
+        <div class="row g-0">
+          <div class="col-6 border-end border-bottom p-3">
+            <strong>OBS #</strong><br>
+            5
+          </div>
+          <div class="col-6 border-bottom p-3 text-end">
+            <strong>Date/Time:</strong><br>
+            6/24/2025 16:24:11
+          </div>
+          <div class="col-6 border-end p-3">
+            <strong>Floor/Room:</strong><br>
+            1, Kitchen
+          </div>
+          <div class="col-6 p-3 text-end">
+            <strong>Reported by:</strong><br>
+            Greg
+          </div>
+        </div>
       </div>
 
       <div class="issue-box">
@@ -86,9 +111,13 @@
 
       <div class="cost-box">
         <h5>Estimated Cost:</h5>
-        <p>$0</p>
+        <p>$627</p>
       </div>
 
+      
+      <div class="photo-container">
+        <img src="file:///C:/Users/DTS/AppData/Local/Temp/tmpankek652/photo_3.jpg" alt="Inspection Photo" />
+      </div>
       
 
       

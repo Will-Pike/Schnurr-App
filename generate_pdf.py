@@ -28,16 +28,27 @@ def generate_report_for_project(project):
 
     pdf_files = []
 
+    price_dict = load_price_dictionary()
+
     with tempfile.TemporaryDirectory() as temp_dir:
         for idx, row in enumerate(rows):
             if row.get("Project", "") != project:
                 continue
 
+            issue_type = row.get("Issue:", "")
+            # Use price dictionary if available, else fallback to sheet value or "N/A"
+            cost = price_dict.get(issue_type, row.get("Estimated Cost", "N/A"))
+
             record = {
+                "project": row.get("Project", ""),  # <-- Add this line
                 "obs_number": row.get("OBS ID#", "N/A"),
                 "date": row.get("Timestamp", ""),
-                "description": row.get("Issue:", ""),
-                "cost": row.get("Estimated Cost", "0"),
+                "floor": row.get("Floor:", ""),
+                "room": row.get("Room:", ""),
+                "user": row.get("User:", ""),
+                "description": issue_type,
+                "responsible": row.get("Who is responsible?", ""),  # <-- Add this line
+                "cost": cost,
                 "photo_path": ""
             }
 
@@ -85,6 +96,26 @@ def generate_report_for_project(project):
         merger.close()
 
         return combined_pdf
+
+def load_price_dictionary():
+    PRICE_SHEET_ID = "1DBpjjmtaiUeGV_eeCwrihEOBrDk8aRKdDUQERFQBLRA"
+    PRICE_SHEET_NAME = "Sheet1"
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(PRICE_SHEET_ID).worksheet(PRICE_SHEET_NAME)
+    rows = sheet.get_all_records()
+    # Build a dictionary: {issue_type: cost}
+    price_dict = {row["Issue Type"]: row["Cost Estimate"] for row in rows}
+    return price_dict
+
+def get_report_record_count(project):
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+    rows = sheet.get_all_records()
+    return sum(1 for row in rows if row.get("Project", "") == project)
 
 
 

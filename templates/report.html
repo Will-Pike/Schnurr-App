@@ -18,14 +18,6 @@
       padding: 20px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    .report-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #dee2e6;
-    }
     .obs-number {
       font-size: 2rem;
       font-weight: bold;
@@ -40,9 +32,11 @@
       border-radius: 5px;
       margin: 15px 0;
       border: 1px solid #dee2e6;
+      font-weight: bold;
     }
     .issue-box {
       background-color: #f8f9fa;
+      font-weight: bold;
     }
     .cost-box {
       background-color: #e9ecef;
@@ -74,14 +68,44 @@
   <div class="container">
     <div class="report-container">
       {% for record in records %}
-      <div class="report-header">
-        <div class="obs-number">OBS #{{ record.obs_number }}</div>
-        <div class="timestamp">{{ record.date }}</div>
+      <div class="report-header mb-4">
+        <div class="issue-box" style="margin-bottom: 10px;">
+          <strong>Project:</strong>
+          <span>{{ record.project }}</span>
+        </div>
+
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+          <tr>
+            <td style="border:1px solid #dee2e6; padding:12px; width:50%;">
+              <strong>OBS #</strong><br>
+              {{ record.obs_number }}
+            </td>
+            <td style="border:1px solid #dee2e6; padding:12px; width:50%; text-align:right;">
+              <strong>Date/Time:</strong><br>
+              {{ record.date }}
+            </td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #dee2e6; padding:12px;">
+              <strong>Floor/Room:</strong><br>
+              {{ record.floor }}{% if record.floor and record.room %}, {% endif %}{{ record.room }}
+            </td>
+            <td style="border:1px solid #dee2e6; padding:12px; text-align:right;">
+              <strong>Reported by:</strong><br>
+              {{ record.user }}
+            </td>
+          </tr>
+        </table>
       </div>
 
       <div class="issue-box">
         <h5>Description of Issue:</h5>
         <p>{{ record.description }}</p>
+      </div>
+
+      <div class="issue-box">
+        <h5>Issue Caused By:</h5>
+        <p>{{ record.responsible }}</p>
       </div>
 
       <div class="cost-box">

@@ -18,14 +18,6 @@
       padding: 20px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    .report-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #dee2e6;
-    }
     .obs-number {
       font-size: 2rem;
       font-weight: bold;
@@ -40,9 +32,11 @@
       border-radius: 5px;
       margin: 15px 0;
       border: 1px solid #dee2e6;
+      font-weight: bold;
     }
     .issue-box {
       background-color: #f8f9fa;
+      font-weight: bold;
     }
     .cost-box {
       background-color: #e9ecef;
@@ -74,9 +68,34 @@
   <div class="container">
     <div class="report-container">
       
-      <div class="report-header">
-        <div class="obs-number">OBS #7</div>
-        <div class="timestamp">6/24/2025 15:43:56</div>
+      <div class="report-header mb-4">
+        <div class="issue-box" style="margin-bottom: 10px;">
+          <strong>Project:</strong>
+          <span>1-A. Capitol Mall Office Building A</span>
+        </div>
+
+        <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+          <tr>
+            <td style="border:1px solid #dee2e6; padding:12px; width:50%;">
+              <strong>OBS #</strong><br>
+              7
+            </td>
+            <td style="border:1px solid #dee2e6; padding:12px; width:50%; text-align:right;">
+              <strong>Date/Time:</strong><br>
+              6/24/2025 15:43:56
+            </td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #dee2e6; padding:12px;">
+              <strong>Floor/Room:</strong><br>
+              1, 3A
+            </td>
+            <td style="border:1px solid #dee2e6; padding:12px; text-align:right;">
+              <strong>Reported by:</strong><br>
+              Greg
+            </td>
+          </tr>
+        </table>
       </div>
 
       <div class="issue-box">
@@ -84,14 +103,19 @@
         <p>Medium Patch Tape and Float Only</p>
       </div>
 
+      <div class="issue-box">
+        <h5>Issue Caused By:</h5>
+        <p>Plumber</p>
+      </div>
+
       <div class="cost-box">
         <h5>Estimated Cost:</h5>
-        <p>$0</p>
+        <p>$202</p>
       </div>
 
       
       <div class="photo-container">
-        <img src="file:///C:/Users/DTS/AppData/Local/Temp/tmpmro2orrn/photo_2.jpg" alt="Inspection Photo" />
+        <img src="file:///C:/Users/DTS/AppData/Local/Temp/tmpadbqqoo2/photo_2.jpg" alt="Inspection Photo" />
       </div>
       
 
