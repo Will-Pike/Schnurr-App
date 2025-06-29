@@ -59,8 +59,7 @@
       <a href="#" class="btn btn-success" id="formButton" style="display:none;" target="_blank" onclick="startObservationReport(event)">Start Observation Report</a>
       <!-- <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a> -->
       <button class="btn btn-secondary pdf-button" onclick="generateReport()">Generate PDF Report</button>
-
-      <div class="status" id="statusDiv"></div>
+      <div id="reportStatus" class="status"></div>
     </div>
   </div>
 </div>
@@ -127,35 +126,35 @@ function startObservationReport(event) {
 
 function generateReport() {
   const project = document.getElementById('projectSelect').value;
-  const statusDiv = document.getElementById('statusDiv');
-  const button = event.target;
+  document.getElementById('reportStatus').textContent = "Starting report generation...";
+  fetch('/generate_report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({project})
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.job_id) {
+      pollReportStatus(data.job_id);
+    } else {
+      document.getElementById('reportStatus').textContent = "Failed to start report.";
+    }
+  });
+}
 
-  button.disabled = true;
-  statusDiv.textContent = "Generating report, please wait...";
-
-  fetch(`/generate_report?project=${encodeURIComponent(project)}`)
-    .then(response => {
-      if (!response.ok) throw new Error("Report generation failed");
-      return response.blob();
-    })
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const safeName = project.replace(/\s+/g, '_');
-      a.href = url;
-      a.download = `combined_report_${safeName}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      statusDiv.textContent = "✅ Report downloaded successfully!";
-    })
-    .catch(err => {
-      console.error(err);
-      statusDiv.textContent = "❌ Failed to generate report.";
-    })
-    .finally(() => {
-      button.disabled = false;
+function pollReportStatus(job_id) {
+  fetch(`/report_status/${job_id}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === "finished") {
+        document.getElementById('reportStatus').innerHTML =
+          `<a href="${data.download_url}">Download PDF Report</a>`;
+      } else if (data.status === "failed") {
+        document.getElementById('reportStatus').textContent = "Report generation failed.";
+      } else {
+        document.getElementById('reportStatus').textContent = "Report is processing...";
+        setTimeout(() => pollReportStatus(job_id), 2000);
+      }
     });
 }
 </script>

@@ -3,6 +3,11 @@ import json
 import os
 import urllib.parse
 from generate_pdf import generate_report_for_project  # Import your clean PDF generator!
+from rq import Queue
+from rq.job import Job
+import redis
+import uuid
+import platform
 
 app = Flask(__name__)
 
@@ -103,14 +108,23 @@ def open_observation_form():
         return "Form URL not found", 404
     return redirect(url)
 
-@app.route('/generate_report')
+redis_conn = redis.Redis()
+task_queue = Queue(connection=redis_conn)
+
+@app.route('/generate_report', methods=['POST'])
 def generate_report():
-    project = request.args.get('project')
+    project = request.json.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
     try:
-        pdf_path = generate_report_for_project(project)
-        return send_file(pdf_path, as_attachment=True)
+        job_id = str(uuid.uuid4())  # Generate a unique job ID
+        job = task_queue.enqueue_call(
+            func='generate_pdf.generate_report_for_project',
+            args=(project,),
+            job_id=job_id,
+            timeout=600  # 10 minutes
+        )
+        return jsonify({"job_id": job_id}), 202
     except Exception as e:
         print(f"Error generating report: {e}")
         return jsonify({"error": str(e)}), 500
@@ -136,6 +150,29 @@ def get_report_count():
     from generate_pdf import get_report_record_count
     count = get_report_record_count(project)
     return jsonify({"count": count})
+
+@app.route('/report_status/<job_id>')
+def report_status(job_id):
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+    except Exception:
+        return jsonify({"status": "not_found"}), 404
+
+    if job.is_finished:
+        return jsonify({"status": "finished", "download_url": f"/download_report/{job_id}"})
+    elif job.is_failed:
+        return jsonify({"status": "failed"})
+    else:
+        return jsonify({"status": "in_progress"})
+
+@app.route('/download_report/<job_id>')
+def download_report(job_id):
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        pdf_path = job.result
+        return send_file(pdf_path, as_attachment=True)
+    except Exception:
+        return "Report not found or not ready.", 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

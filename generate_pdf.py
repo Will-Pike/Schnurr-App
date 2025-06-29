@@ -10,7 +10,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # Uncomment this line for Linux or MacOS local environment:
 WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
-#  For Windows local environment, use the following line instead:
+# For Windows local environment, use the following line instead:
 # WKHTMLTOPDF_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
@@ -95,7 +95,11 @@ def generate_report_for_project(project):
         merger.write(combined_pdf)
         merger.close()
 
-        return combined_pdf
+        # Save PDF to a known location, e.g.:
+        output_path = f"/tmp/report_{project}.pdf"  # or a temp dir on Windows
+        shutil.move(combined_pdf, output_path)  # Move the file to the desired location
+
+        return output_path
 
 def load_price_dictionary():
     PRICE_SHEET_ID = "1DBpjjmtaiUeGV_eeCwrihEOBrDk8aRKdDUQERFQBLRA"
