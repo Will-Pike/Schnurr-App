@@ -131,49 +131,13 @@ function startObservationReport(event) {
     });
 }
 
-function generateReport() {
-  const project = document.getElementById('projectSelect').value;
-  document.getElementById('reportStatus').textContent = "Starting report generation...";
-  fetch('/generate_report', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({project})
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.job_id) {
-      pollReportStatus(data.job_id);
-    } else {
-      document.getElementById('reportStatus').textContent = "Failed to start report.";
-    }
-  });
-}
-
-function pollReportStatus(job_id) {
-  fetch(`/report_status/${job_id}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.status === "finished") {
-        document.getElementById('reportStatus').innerHTML =
-          `<a href="${data.download_url}">Download PDF Report</a>`;
-      } else if (data.status === "failed") {
-        document.getElementById('reportStatus').textContent = "Report generation failed.";
-      } else {
-        document.getElementById('reportStatus').textContent = "Report is processing...";
-        setTimeout(() => pollReportStatus(job_id), 2000);
-      }
-    });
-}
-
 let progressInterval;
 let progress = 0;
-let progressMax = 100;
 let estimatedTime = 30; // seconds, will be set dynamically
 
 function startFakeProgressBar(recordCount) {
   estimatedTime = Math.max(10, recordCount * 2); // e.g., 2 seconds per record, min 10s
   progress = 0;
-  progressMax = 100;
   document.getElementById('progressContainer').style.display = '';
   updateProgressBar();
   progressInterval = setInterval(() => {
@@ -195,6 +159,52 @@ function finishProgressBar() {
   clearInterval(progressInterval);
   progress = 100;
   updateProgressBar();
+}
+
+function generateReport() {
+  const project = document.getElementById('projectSelect').value;
+  document.getElementById('reportStatus').textContent = "Starting report generation...";
+  // Get record count first
+  fetch(`/get_report_count?project=${encodeURIComponent(project)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.count !== undefined) {
+        startFakeProgressBar(data.count);
+      }
+      // Now start the report generation
+      return fetch('/generate_report', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project})
+      });
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.job_id) {
+        pollReportStatus(data.job_id);
+      } else {
+        document.getElementById('reportStatus').textContent = "Failed to start report.";
+        document.getElementById('progressContainer').style.display = 'none';
+      }
+    });
+}
+
+function pollReportStatus(job_id) {
+  fetch(`/report_status/${job_id}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === "finished") {
+        finishProgressBar();
+        document.getElementById('reportStatus').innerHTML =
+          `<a href="${data.download_url}">Download PDF Report</a>`;
+      } else if (data.status === "failed") {
+        document.getElementById('reportStatus').textContent = "Report generation failed.";
+        document.getElementById('progressContainer').style.display = 'none';
+      } else {
+        document.getElementById('reportStatus').textContent = "Report is processing...";
+        setTimeout(() => pollReportStatus(job_id), 2000);
+      }
+    });
 }
 </script>
 </body>
