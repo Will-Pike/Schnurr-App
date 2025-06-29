@@ -134,6 +134,7 @@ function startObservationReport(event) {
 let progressInterval;
 let progress = 0;
 let estimatedTime = 30; // seconds, will be set dynamically
+let reportRecordCount = null; // Add this at the top with your other variables
 
 function startFakeProgressBar(recordCount) {
   estimatedTime = Math.max(10, recordCount * 2); // e.g., 2 seconds per record, min 10s
@@ -142,7 +143,7 @@ function startFakeProgressBar(recordCount) {
   updateProgressBar();
   progressInterval = setInterval(() => {
     if (progress < 99) {
-      progress += 100 / (estimatedTime * 2); // update every 500ms
+      progress += 100 / (estimatedTime * 4); // update every 500ms
       updateProgressBar();
     }
   }, 500);
@@ -169,6 +170,7 @@ function generateReport() {
     .then(res => res.json())
     .then(data => {
       if (data.count !== undefined) {
+        reportRecordCount = data.count; // Store the count for later use
         startFakeProgressBar(data.count);
       }
       // Now start the report generation
@@ -201,7 +203,12 @@ function pollReportStatus(job_id) {
         document.getElementById('reportStatus').textContent = "Report generation failed.";
         document.getElementById('progressContainer').style.display = 'none';
       } else {
-        document.getElementById('reportStatus').textContent = "Report is processing...";
+        // Show the record count in the status message
+        let msg = "";
+        if (reportRecordCount !== null) {
+          msg = `${reportRecordCount} records found. `;
+        }
+        document.getElementById('reportStatus').textContent = msg + "Report is processing...";
         setTimeout(() => pollReportStatus(job_id), 2000);
       }
     });
