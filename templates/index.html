@@ -60,6 +60,13 @@
       <!-- <a href="/open_foreman_form" class="btn btn-success" target="_blank">Start Foreman Field Report</a> -->
       <button class="btn btn-secondary pdf-button" onclick="generateReport()">Generate PDF Report</button>
       <div id="reportStatus" class="status"></div>
+
+      <div id="progressContainer" style="display:none;">
+        <div style="background:#eee; width:100%; height:24px; border-radius:12px;">
+          <div id="progressBar" style="background:#0d6efd; width:0%; height:24px; border-radius:12px; transition:width 0.2s;"></div>
+        </div>
+        <div id="progressText" style="text-align:center; margin-top:4px;">0%</div>
+      </div>
     </div>
   </div>
 </div>
@@ -156,6 +163,38 @@ function pollReportStatus(job_id) {
         setTimeout(() => pollReportStatus(job_id), 2000);
       }
     });
+}
+
+let progressInterval;
+let progress = 0;
+let progressMax = 100;
+let estimatedTime = 30; // seconds, will be set dynamically
+
+function startFakeProgressBar(recordCount) {
+  estimatedTime = Math.max(10, recordCount * 2); // e.g., 2 seconds per record, min 10s
+  progress = 0;
+  progressMax = 100;
+  document.getElementById('progressContainer').style.display = '';
+  updateProgressBar();
+  progressInterval = setInterval(() => {
+    if (progress < 99) {
+      progress += 100 / (estimatedTime * 2); // update every 500ms
+      updateProgressBar();
+    }
+  }, 500);
+}
+
+function updateProgressBar() {
+  const bar = document.getElementById('progressBar');
+  const text = document.getElementById('progressText');
+  bar.style.width = Math.min(progress, 100) + '%';
+  text.textContent = Math.floor(Math.min(progress, 100)) + '%';
+}
+
+function finishProgressBar() {
+  clearInterval(progressInterval);
+  progress = 100;
+  updateProgressBar();
 }
 </script>
 </body>
