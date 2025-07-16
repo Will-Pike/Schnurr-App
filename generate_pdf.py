@@ -121,6 +121,28 @@ def get_report_record_count(project):
     rows = sheet.get_all_records()
     return sum(1 for row in rows if row.get("Project", "") == project)
 
+def get_last_row_data():
+    """Get the last row of data from the spreadsheet"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        rows = sheet.get_all_records()
+        
+        if rows:
+            last_row = rows[-1]  # Get the last row
+            return {
+                "project": last_row.get("Project", ""),
+                "user": last_row.get("User:", ""),
+                "floor": last_row.get("Floor:", ""),
+                "room": last_row.get("Room:", "")
+            }
+        return None
+    except Exception as e:
+        print(f"Error getting last row data: {e}")
+        return None
+
 
 
 

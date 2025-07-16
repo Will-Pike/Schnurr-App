@@ -79,55 +79,80 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function loadProjects() {
   fetch('/get_projects')
-    .then(res => res.json())
+    .then(response => response.json())
     .then(data => {
       const select = document.getElementById('projectSelect');
       select.innerHTML = '';
-      data.projects.forEach(project => {
-        const opt = document.createElement('option');
-        opt.value = project;
-        opt.textContent = project;
-        select.appendChild(opt);
-      });
-      updateOBSDisplay();
-    })
-    .catch(err => console.error('Error loading projects:', err));
+      
+      // Get last row data to determine default project
+      return fetch('/get_last_row_data')
+        .then(response => response.json())
+        .then(lastRowData => {
+          data.projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project;
+            option.textContent = project;
+            select.appendChild(option);
+          });
+          
+          // Set default project from last row data
+          if (lastRowData && lastRowData.project && data.projects.includes(lastRowData.project)) {
+            select.value = lastRowData.project;
+          } else if (data.projects.length > 0) {
+            select.value = data.projects[0];
+          }
+          
+          updateOBSDisplay();
+        });
+    });
 }
 
+// Modify the updateOBSDisplay function to get last row data
 function updateOBSDisplay() {
   const project = document.getElementById('projectSelect').value;
+  if (!project) return;
+  
   fetch(`/get_current_obs?project=${encodeURIComponent(project)}`)
-    .then(res => res.json())
+    .then(response => response.json())
     .then(data => {
       document.getElementById('obsNumber').textContent = data.obs_number;
-      const formBtn = document.getElementById('formButton');
-      formBtn.href = `/open_observation_form?project=${encodeURIComponent(project)}`;
-      formBtn.style.display = 'inline-block';
-    })
-    .catch(err => console.error('Error updating OBS display:', err));
+      document.getElementById('formButton').href = data.form_url;
+      document.getElementById('formButton').style.display = 'block';
+      
+      // Store last row data for use when starting observation
+      if (data.last_row_data) {
+        window.lastRowData = data.last_row_data;
+      }
+    });
 }
 
+// Update the startObservationReport function to use last row data
 function startObservationReport(event) {
   event.preventDefault();
   const project = document.getElementById('projectSelect').value;
-  // Get the current OBS number and form URL
-  fetch(`/get_current_obs?project=${encodeURIComponent(project)}`)
-    .then(res => res.json())
+  
+  fetch(`/get_next_obs?project=${encodeURIComponent(project)}`)
+    .then(response => response.json())
     .then(data => {
-      // Open the form with the current OBS number
-      if (data.form_url) {
-        window.open(data.form_url, '_blank');
+      // Build URL with last row data if available
+      let url = data.form_url;
+      if (window.lastRowData) {
+        const urlObj = new URL(url);
+        // Add the last row data as URL parameters
+        // You'll need to match these with your actual form field IDs
+        if (window.lastRowData.user) {
+          urlObj.searchParams.set('entry.USER_FIELD_ID', window.lastRowData.user);
+        }
+        if (window.lastRowData.floor) {
+          urlObj.searchParams.set('entry.FLOOR_FIELD_ID', window.lastRowData.floor);
+        }
+        if (window.lastRowData.room) {
+          urlObj.searchParams.set('entry.ROOM_FIELD_ID', window.lastRowData.room);
+        }
+        url = urlObj.toString();
       }
-      // Now increment the OBS number for next time
-      fetch(`/get_next_obs?project=${encodeURIComponent(project)}`)
-        .then(res => res.json())
-        .then(nextData => {
-          // Update the displayed OBS number
-          document.getElementById('obsNumber').textContent = nextData.obs_number;
-        });
-    })
-    .catch(err => {
-      console.error('Error starting observation report:', err);
+      
+      window.open(url, '_blank');
     });
 }
 
