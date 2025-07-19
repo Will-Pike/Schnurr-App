@@ -17,7 +17,7 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
             return json.load(f)
-    return {"projects": {}, "current_obs": {}}
+    return {"projects": {}}
 
 def save_config(config):
     with open(CONFIG_FILE, 'w') as f:
@@ -28,18 +28,29 @@ app_config = load_config()
 def get_projects():
     return app_config.get("projects", {})
 
-def get_prefilled_form_url(project, obs_number):
+def get_prefilled_form_url(project, obs_number, user=None, floor=None, room=None):
     projects = get_projects()
     if project not in projects:
         return None
+    
     google_form_url = app_config.get("form_url")
     obs_field_id = app_config.get("obs_field_id")
     project_field_id = app_config.get("project_field_id")
+    
     params = {
         'usp': 'pp_url',
         obs_field_id: str(obs_number),
         project_field_id: project
     }
+    
+    # Add user, floor, and room field IDs if available
+    if user and app_config.get("user_field_id"):
+        params[app_config.get("user_field_id")] = user
+    if floor and app_config.get("floor_field_id"):
+        params[app_config.get("floor_field_id")] = floor
+    if room and app_config.get("room_field_id"):
+        params[app_config.get("room_field_id")] = room
+    
     return f"{google_form_url}?{urllib.parse.urlencode(params)}"
 
 @app.route('/')
@@ -52,26 +63,84 @@ def index():
 def get_projects_route():
     return jsonify({"projects": list(get_projects().keys())})
 
+@app.route('/get_last_row_data')
+def get_last_row_data_route():
+    try:
+        from generate_pdf import get_last_row_data
+        data = get_last_row_data()
+        if data:
+            return jsonify(data)
+        else:
+            return jsonify({"error": "No data found"}), 404
+    except Exception as e:
+        print(f"Error in get_last_row_data_route: {e}")
+        return jsonify({"error": "Failed to load data"}), 500
+
 @app.route('/get_current_obs')
 def get_current_obs_route():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    current_obs = app_config["current_obs"].get(project, 0)
-    form_url = get_prefilled_form_url(project, current_obs)
-    return jsonify({"obs_number": current_obs, "form_url": form_url})
+    
+    try:
+        # Get the highest OBS from spreadsheet and add 1 for the next number
+        from generate_pdf import get_highest_obs_for_project, get_last_row_data
+        highest_obs = get_highest_obs_for_project(project)
+        next_obs = highest_obs + 1
+        
+        # Get last row data for auto-filling
+        last_row_data = get_last_row_data()
+        
+        if last_row_data:
+            form_url = get_prefilled_form_url(
+                project, 
+                next_obs, 
+                user=last_row_data.get("user"),
+                floor=last_row_data.get("floor"),
+                room=last_row_data.get("room")
+            )
+        else:
+            form_url = get_prefilled_form_url(project, next_obs)
+        
+        response = {"obs_number": next_obs, "form_url": form_url}
+        if last_row_data:
+            response["last_row_data"] = last_row_data
+        
+        return jsonify(response)
+    except Exception as e:
+        print(f"Error in get_current_obs_route: {e}")
+        return jsonify({"error": "Failed to load OBS data"}), 500
 
 @app.route('/get_next_obs')
 def get_next_obs_route():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    current = app_config["current_obs"].get(project, 0)
-    next_obs = current + 1
-    app_config["current_obs"][project] = next_obs
-    save_config(app_config)
-    form_url = get_prefilled_form_url(project, next_obs)
-    return jsonify({"obs_number": next_obs, "form_url": form_url})
+    
+    try:
+        # Get the highest OBS from spreadsheet and add 1 for the next number
+        from generate_pdf import get_highest_obs_for_project, get_last_row_data
+        highest_obs = get_highest_obs_for_project(project)
+        next_obs = highest_obs + 1
+        
+        # Get last row data for auto-filling
+        last_row_data = get_last_row_data()
+        
+        if last_row_data:
+            form_url = get_prefilled_form_url(
+                project, 
+                next_obs, 
+                user=last_row_data.get("user"),
+                floor=last_row_data.get("floor"),
+                room=last_row_data.get("room")
+            )
+        else:
+            form_url = get_prefilled_form_url(project, next_obs)
+        
+        return jsonify({"obs_number": next_obs, "form_url": form_url})
+    except Exception as e:
+        print(f"Error in get_next_obs_route: {e}")
+        return jsonify({"error": "Failed to load OBS data"}), 500
 
 @app.route('/reset_obs', methods=['POST'])
 def reset_obs():
@@ -82,8 +151,7 @@ def reset_obs():
         return jsonify({"error": "Invalid or missing project"}), 400
     if not isinstance(new_number, int) or new_number < 1:
         return jsonify({"error": "Invalid new_number"}), 400
-    app_config["current_obs"][project] = new_number - 1
-    save_config(app_config)
+    # This route is now mostly obsolete but keeping for compatibility
     return jsonify({"success": True})
 
 @app.route('/open_observation_form')
@@ -91,11 +159,17 @@ def open_observation_form():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return "Invalid or missing project", 400
-    current_obs = app_config["current_obs"].get(project, 0)
-    url = get_prefilled_form_url(project, current_obs)
-    if not url:
-        return "Form URL not found", 404
-    return redirect(url)
+    try:
+        from generate_pdf import get_highest_obs_for_project
+        highest_obs = get_highest_obs_for_project(project)
+        next_obs = highest_obs + 1
+        url = get_prefilled_form_url(project, next_obs)
+        if not url:
+            return "Form URL not found", 404
+        return redirect(url)
+    except Exception as e:
+        print(f"Error in open_observation_form: {e}")
+        return "Error loading form", 500
 
 redis_conn = redis.Redis()
 task_queue = Queue(connection=redis_conn)
@@ -125,10 +199,7 @@ def obs_submitted():
     obs_number = data.get('obs_number')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    current = app_config["current_obs"].get(project, 0)
-    if obs_number == current:
-        app_config["current_obs"][project] = current + 1
-        save_config(app_config)
+    # This route is now mostly obsolete but keeping for compatibility
     return jsonify({"success": True})
 
 @app.route('/get_report_count')
@@ -136,10 +207,13 @@ def get_report_count():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    # Load your sheet and count matching records
-    from generate_pdf import get_report_record_count
-    count = get_report_record_count(project)
-    return jsonify({"count": count})
+    try:
+        from generate_pdf import get_report_record_count
+        count = get_report_record_count(project)
+        return jsonify({"count": count})
+    except Exception as e:
+        print(f"Error getting report count: {e}")
+        return jsonify({"error": "Failed to get report count"}), 500
 
 @app.route('/report_status/<job_id>')
 def report_status(job_id):

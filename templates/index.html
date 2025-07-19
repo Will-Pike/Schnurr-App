@@ -84,24 +84,36 @@ function loadProjects() {
       const select = document.getElementById('projectSelect');
       select.innerHTML = '';
       
+      data.projects.forEach(project => {
+        const option = document.createElement('option');
+        option.value = project;
+        option.textContent = project;
+        select.appendChild(option);
+      });
+      
       // Get last row data to determine default project
-      return fetch('/get_last_row_data')
-        .then(response => response.json())
+      fetch('/get_last_row_data')
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('No last row data');
+          }
+        })
         .then(lastRowData => {
-          data.projects.forEach(project => {
-            const option = document.createElement('option');
-            option.value = project;
-            option.textContent = project;
-            select.appendChild(option);
-          });
-          
           // Set default project from last row data
           if (lastRowData && lastRowData.project && data.projects.includes(lastRowData.project)) {
             select.value = lastRowData.project;
           } else if (data.projects.length > 0) {
             select.value = data.projects[0];
           }
-          
+          updateOBSDisplay();
+        })
+        .catch(error => {
+          console.log('Using first project as default:', error);
+          if (data.projects.length > 0) {
+            select.value = data.projects[0];
+          }
           updateOBSDisplay();
         });
     });
