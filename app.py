@@ -28,45 +28,18 @@ app_config = load_config()
 def get_projects():
     return app_config.get("projects", {})
 
-def get_current_obs(project):
-    return app_config.get("current_obs", {}).get(project, 0)
-
-def set_current_obs(project, obs_number):
-    if "current_obs" not in app_config:
-        app_config["current_obs"] = {}
-    app_config["current_obs"][project] = obs_number
-    save_config(app_config)
-
-def get_next_obs(project):
-    current = get_current_obs(project)
-    next_number = current + 1
-    set_current_obs(project, next_number)
-    return next_number
-
-def get_prefilled_form_url(project, obs_number, user=None, floor=None, room=None):
+def get_prefilled_form_url(project, obs_number):
     projects = get_projects()
     if project not in projects:
         return None
-    
     google_form_url = app_config.get("form_url")
     obs_field_id = app_config.get("obs_field_id")
     project_field_id = app_config.get("project_field_id")
-    
     params = {
         'usp': 'pp_url',
         obs_field_id: str(obs_number),
         project_field_id: project
     }
-    
-    # Add user, floor, and room field IDs to your app_config.json
-    # You'll need to find these field IDs from your Google Form
-    if user and app_config.get("user_field_id"):
-        params[app_config.get("user_field_id")] = user
-    if floor and app_config.get("floor_field_id"):
-        params[app_config.get("floor_field_id")] = floor
-    if room and app_config.get("room_field_id"):
-        params[app_config.get("room_field_id")] = room
-    
     return f"{google_form_url}?{urllib.parse.urlencode(params)}"
 
 @app.route('/')
@@ -84,53 +57,20 @@ def get_current_obs_route():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    
-    current_obs = get_current_obs(project)
-    
-    # Get last row data for auto-filling
-    from generate_pdf import get_last_row_data
-    last_row_data = get_last_row_data()
-    
-    if last_row_data:
-        form_url = get_prefilled_form_url(
-            project, 
-            current_obs, 
-            user=last_row_data.get("user"),
-            floor=last_row_data.get("floor"),
-            room=last_row_data.get("room")
-        )
-    else:
-        form_url = get_prefilled_form_url(project, current_obs)
-    
-    response = {"obs_number": current_obs, "form_url": form_url}
-    if last_row_data:
-        response["last_row_data"] = last_row_data
-    
-    return jsonify(response)
+    current_obs = app_config["current_obs"].get(project, 0)
+    form_url = get_prefilled_form_url(project, current_obs)
+    return jsonify({"obs_number": current_obs, "form_url": form_url})
 
 @app.route('/get_next_obs')
 def get_next_obs_route():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    
-    next_obs = get_next_obs(project)
-    
-    # Get last row data for auto-filling
-    from generate_pdf import get_last_row_data
-    last_row_data = get_last_row_data()
-    
-    if last_row_data:
-        form_url = get_prefilled_form_url(
-            project, 
-            next_obs, 
-            user=last_row_data.get("user"),
-            floor=last_row_data.get("floor"),
-            room=last_row_data.get("room")
-        )
-    else:
-        form_url = get_prefilled_form_url(project, next_obs)
-    
+    current = app_config["current_obs"].get(project, 0)
+    next_obs = current + 1
+    app_config["current_obs"][project] = next_obs
+    save_config(app_config)
+    form_url = get_prefilled_form_url(project, next_obs)
     return jsonify({"obs_number": next_obs, "form_url": form_url})
 
 @app.route('/reset_obs', methods=['POST'])
@@ -142,7 +82,8 @@ def reset_obs():
         return jsonify({"error": "Invalid or missing project"}), 400
     if not isinstance(new_number, int) or new_number < 1:
         return jsonify({"error": "Invalid new_number"}), 400
-    set_current_obs(project, new_number - 1)
+    app_config["current_obs"][project] = new_number - 1
+    save_config(app_config)
     return jsonify({"success": True})
 
 @app.route('/open_observation_form')
@@ -150,7 +91,7 @@ def open_observation_form():
     project = request.args.get('project')
     if not project or project not in get_projects():
         return "Invalid or missing project", 400
-    current_obs = get_current_obs(project)
+    current_obs = app_config["current_obs"].get(project, 0)
     url = get_prefilled_form_url(project, current_obs)
     if not url:
         return "Form URL not found", 404
@@ -184,9 +125,10 @@ def obs_submitted():
     obs_number = data.get('obs_number')
     if not project or project not in get_projects():
         return jsonify({"error": "Invalid or missing project"}), 400
-    current = get_current_obs(project)
+    current = app_config["current_obs"].get(project, 0)
     if obs_number == current:
-        set_current_obs(project, current + 1)
+        app_config["current_obs"][project] = current + 1
+        save_config(app_config)
     return jsonify({"success": True})
 
 @app.route('/get_report_count')
@@ -221,15 +163,6 @@ def download_report(job_id):
         return send_file(pdf_path, as_attachment=True)
     except Exception:
         return "Report not found or not ready.", 404
-
-@app.route('/get_last_row_data')
-def get_last_row_data_route():
-    from generate_pdf import get_last_row_data
-    data = get_last_row_data()
-    if data:
-        return jsonify(data)
-    else:
-        return jsonify({"error": "No data found"}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

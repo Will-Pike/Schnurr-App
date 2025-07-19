@@ -143,6 +143,35 @@ def get_last_row_data():
         print(f"Error getting last row data: {e}")
         return None
 
+def get_highest_obs_for_project(project):
+    """Get the highest OBS number for a specific project from the spreadsheet"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        rows = sheet.get_all_records()
+        
+        highest_obs = 0
+        for row in rows:
+            if row.get("Project", "") == project:
+                obs_id = row.get("OBS ID#", "")
+                # Extract number from OBS ID (assuming format like "1-A-001" or just "1")
+                try:
+                    # If it's a format like "1-A-001", extract the last part
+                    if isinstance(obs_id, str) and '-' in obs_id:
+                        obs_number = int(obs_id.split('-')[-1])
+                    else:
+                        obs_number = int(obs_id)
+                    highest_obs = max(highest_obs, obs_number)
+                except (ValueError, TypeError):
+                    continue
+        
+        return highest_obs
+    except Exception as e:
+        print(f"Error getting highest OBS for project {project}: {e}")
+        return 0
+
 
 
 
