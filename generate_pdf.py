@@ -22,9 +22,9 @@ from googleapiclient.http import MediaIoBaseUpload
 import time
 
 # Uncomment this line for Linux or MacOS local environment:
-# WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
+WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 # For Windows local environment, use the following line instead:
-WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
+# WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
