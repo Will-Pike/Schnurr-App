@@ -42,16 +42,6 @@
       background-color: #e9ecef;
       font-weight: bold;
     }
-    .photo-container {
-      margin: 20px 0;
-      text-align: center;
-    }
-    .photo-container img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 5px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.2);
-    }
     @media print {
       body {
         padding: 0;
@@ -68,24 +58,59 @@
     .photo-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 15px;
       margin: 10px 0;
+      justify-content: center;
     }
-    .photo-container {
-      flex: 0 0 30%;
-      max-width: 300px;
+    
+    /* Single photo - large and centered */
+    .photo-grid.single-photo .photo-container {
+      flex: 0 0 80%;
+      max-width: 600px;
     }
-    .photo-container img {
+    .photo-grid.single-photo .photo-container img {
       width: 100%;
       height: auto;
-      max-height: 200px;
+      max-height: 400px;
+      object-fit: contain;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+    }
+    
+    /* Two photos - side by side */
+    .photo-grid.two-photos .photo-container {
+      flex: 0 0 45%;
+      max-width: 350px;
+    }
+    .photo-grid.two-photos .photo-container img {
+      width: 100%;
+      height: auto;
+      max-height: 250px;
       object-fit: contain;
       border: 1px solid #ddd;
+      border-radius: 5px;
     }
+    
+    /* Three or more photos - smaller grid */
+    .photo-grid.multiple-photos .photo-container {
+      flex: 0 0 30%;
+      max-width: 250px;
+    }
+    .photo-grid.multiple-photos .photo-container img {
+      width: 100%;
+      height: auto;
+      max-height: 180px;
+      object-fit: contain;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    
     .photo-container p {
       text-align: center;
       font-size: 12px;
-      margin: 5px 0;
+      margin: 8px 0;
+      font-weight: bold;
+      color: #666;
     }
   </style>
 </head>
@@ -141,7 +166,7 @@
       {% if record.photo_paths and record.photo_paths|length > 0 %}
       <div class="photos-section">
         <h4>Photos ({{ record.photo_paths|length }}):</h4>
-        <div class="photo-grid">
+        <div class="photo-grid {% if record.photo_paths|length == 1 %}single-photo{% elif record.photo_paths|length == 2 %}two-photos{% else %}multiple-photos{% endif %}">
           {% for photo_path in record.photo_paths %}
           <div class="photo-container">
             <img src="{{ photo_path }}" alt="Photo {{ loop.index }}" />
