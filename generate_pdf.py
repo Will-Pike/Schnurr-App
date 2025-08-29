@@ -57,39 +57,44 @@ def generate_report_for_project(project):
                 continue
 
             issue_type = row.get("Issue:", "")
-            # Use price dictionary if available, else fallback to sheet value or "N/A"
             cost = price_dict.get(issue_type, row.get("Estimated Cost", "N/A"))
 
             record = {
-                "project": row.get("Project", ""),  # <-- Add this line
+                "project": row.get("Project", ""),
                 "obs_number": row.get("OBS ID#", "N/A"),
                 "date": row.get("Timestamp", ""),
                 "floor": row.get("Floor:", ""),
                 "room": row.get("Room:", ""),
                 "user": row.get("User:", ""),
                 "description": issue_type,
-                "responsible": row.get("Who is responsible?", ""),  # <-- Add this line
+                "responsible": row.get("Who is responsible?", ""),
                 "cost": cost,
-                "photo_path": ""
+                "photo_paths": []  # Changed to list for multiple photos
             }
 
-            photo_url = row.get("Upload photo:", "")
-            temp_img_path = None
-            if "drive.google.com" in photo_url and "id=" in photo_url:
-                file_id = photo_url.split("id=")[-1]
-                direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                try:
-                    response = requests.get(direct_url, stream=True, timeout=10)
-                    response.raise_for_status()
-                    temp_img_path = os.path.join(temp_dir, f"photo_{idx+1}.jpg")
-                    with open(temp_img_path, 'wb') as f:
-                        shutil.copyfileobj(response.raw, f)
-                    record["photo_path"] = f"file:///{temp_img_path.replace(os.sep, '/')}"
-                    # Only print if download succeeded
-                    with open(temp_img_path, 'rb') as f:
-                        print(f.read(10))
-                except Exception as e:
-                    print(f"⚠️ Image download failed for OBS {record['obs_number']}: {e}")
+            # Handle multiple photo URLs
+            photo_urls = row.get("Upload photo:", "")
+            if photo_urls:
+                # Parse multiple URLs (comma-separated)
+                urls = [url.strip() for url in photo_urls.split(',') if url.strip()]
+                
+                for photo_idx, photo_url in enumerate(urls):
+                    if "drive.google.com" in photo_url and "id=" in photo_url:
+                        file_id = photo_url.split("id=")[-1].split('&')[0]  # Handle additional parameters
+                        direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                        try:
+                            response = requests.get(direct_url, stream=True, timeout=10)
+                            response.raise_for_status()
+                            temp_img_path = os.path.join(temp_dir, f"photo_{idx+1}_{photo_idx+1}.jpg")
+                            with open(temp_img_path, 'wb') as f:
+                                shutil.copyfileobj(response.raw, f)
+                            
+                            # Add the file path to the list
+                            record["photo_paths"].append(f"file:///{temp_img_path.replace(os.sep, '/')}")
+                            print(f"✅ Downloaded photo {photo_idx+1} for OBS {record['obs_number']}")
+                            
+                        except Exception as e:
+                            print(f"⚠️ Image download failed for OBS {record['obs_number']}, photo {photo_idx+1}: {e}")
             
             html_content = template.render(records=[record])
             
@@ -116,9 +121,8 @@ def generate_report_for_project(project):
         merger.write(combined_pdf)
         merger.close()
 
-        # Save PDF to a known location, e.g.:
-        output_path = f"/tmp/report_{project}.pdf"  # or a temp dir on Windows
-        shutil.move(combined_pdf, output_path)  # Move the file to the desired location
+        output_path = f"/tmp/report_{project}.pdf"
+        shutil.move(combined_pdf, output_path)
 
         return output_path
 
@@ -211,7 +215,8 @@ def get_obs_list_for_project(project):
                     "date": row.get("Timestamp", ""),
                     "floor": row.get("Floor:", ""),
                     "room": row.get("Room:", ""),
-                    "issue": row.get("Issue:", "")
+                    "issue": row.get("Issue:", ""),
+                    "user": row.get("User:", "")
                 })
         
         # Sort by OBS ID descending (newest first)

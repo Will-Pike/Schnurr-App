@@ -62,6 +62,31 @@
         padding: 0;
       }
     }
+    .photos-section {
+      margin: 20px 0;
+    }
+    .photo-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    .photo-container {
+      flex: 0 0 30%;
+      max-width: 300px;
+    }
+    .photo-container img {
+      width: 100%;
+      height: auto;
+      max-height: 200px;
+      object-fit: contain;
+      border: 1px solid #ddd;
+    }
+    .photo-container p {
+      text-align: center;
+      font-size: 12px;
+      margin: 5px 0;
+    }
   </style>
 </head>
 <body>
@@ -113,14 +138,22 @@
         <p>${{ record.cost }}</p>
       </div>
 
-      {% if record.photo_path %}
-      <div class="photo-container">
-        <img src="{{ record.photo_path }}" alt="Inspection Photo" />
+      {% if record.photo_paths and record.photo_paths|length > 0 %}
+      <div class="photos-section">
+        <h4>Photos ({{ record.photo_paths|length }}):</h4>
+        <div class="photo-grid">
+          {% for photo_path in record.photo_paths %}
+          <div class="photo-container">
+            <img src="{{ photo_path }}" alt="Photo {{ loop.index }}" />
+            <p>Photo {{ loop.index }}</p>
+          </div>
+          {% endfor %}
+        </div>
       </div>
       {% endif %}
 
       {% if not loop.last %}
-      <hr class="my-4" />
+      <div style="page-break-after: always;"></div>
       {% endif %}
       {% endfor %}
     </div>
