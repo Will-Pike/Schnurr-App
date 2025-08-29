@@ -7,14 +7,35 @@ import pdfkit
 from PyPDF2 import PdfMerger
 from jinja2 import Environment, FileSystemLoader
 from oauth2client.service_account import ServiceAccountCredentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.service_account import Credentials
+import io
+from googleapiclient.http import MediaIoBaseUpload
+import pickle
+import os
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+import io
+from googleapiclient.http import MediaIoBaseUpload
+import time
 
 # Uncomment this line for Linux or MacOS local environment:
-WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
+# WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 # For Windows local environment, use the following line instead:
-# WKHTMLTOPDF_PATH = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
+
+# Google Drive folder ID where photos should be uploaded
+DRIVE_FOLDER_ID = "1J0vCCtKs2nBvL0cZFuye_FtGKjk7ZkEFZwgqtaHtRx_ygPItIuz5eiegm_FyWvQl866QR-bC"
+
+# OAuth settings
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+CLIENT_SECRETS_FILE = "client_secret.json"  # You'll need to create this
+TOKEN_FILE = "token.pickle"
 
 def generate_report_for_project(project):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -171,6 +192,467 @@ def get_highest_obs_for_project(project):
     except Exception as e:
         print(f"Error getting highest OBS for project {project}: {e}")
         return 0
+
+def get_obs_list_for_project(project):
+    """Get list of all OBS entries for a specific project"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        rows = sheet.get_all_records()
+        
+        obs_list = []
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project:
+                obs_list.append({
+                    "row_index": idx + 2,  # +2 because sheets are 1-indexed and we skip header
+                    "obs_id": row.get("OBS ID#", ""),
+                    "date": row.get("Timestamp", ""),
+                    "floor": row.get("Floor:", ""),
+                    "room": row.get("Room:", ""),
+                    "issue": row.get("Issue:", "")
+                })
+        
+        # Sort by OBS ID descending (newest first)
+        obs_list.sort(key=lambda x: str(x.get("obs_id", "")), reverse=True)
+        return obs_list
+    except Exception as e:
+        print(f"Error getting OBS list: {e}")
+        return []
+
+def get_obs_details(project, obs_id):
+    """Get detailed information for a specific OBS entry"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        rows = sheet.get_all_records()
+        
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project and str(row.get("OBS ID#", "")) == str(obs_id):
+                # Get photo URLs using the correct column name
+                photo_url = row.get("Upload photo:", "")
+                
+                # Debug: Print what we found
+                print(f"Found photo URL for OBS {obs_id}: '{photo_url}'")
+                
+                # Clean up photo URLs - handle various formats
+                if photo_url:
+                    # Remove any extra whitespace, newlines, and normalize separators
+                    photo_url = photo_url.replace('\n', ',').replace('\r', ',').replace(';', ',')
+                    photo_url = photo_url.strip()
+                
+                return {
+                    "row_index": idx + 2,
+                    "project": row.get("Project", ""),
+                    "obs_id": row.get("OBS ID#", ""),
+                    "timestamp": row.get("Timestamp", ""),
+                    "user": row.get("User:", ""),
+                    "floor": row.get("Floor:", ""),
+                    "room": row.get("Room:", ""),
+                    "issue": row.get("Issue:", ""),
+                    "responsible": row.get("Who is responsible?", ""),
+                    "photo_url": photo_url
+                }
+        return None
+    except Exception as e:
+        print(f"Error getting OBS details: {e}")
+        return None
+
+def update_obs_in_spreadsheet(project, obs_id, updated_data):
+    """Update an OBS entry in the spreadsheet"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        
+        # Get header row to map field names to column numbers
+        headers = sheet.row_values(1)
+        
+        # Create a mapping of field names to column indices
+        column_map = {}
+        for i, header in enumerate(headers):
+            column_map[header] = i + 1  # +1 because sheets are 1-indexed
+        
+        # Find the row to update
+        rows = sheet.get_all_records()
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project and str(row.get("OBS ID#", "")) == str(obs_id):
+                row_index = idx + 2  # +2 because sheets are 1-indexed and we skip header
+                
+                # Update the fields using the column mapping
+                if 'user' in updated_data and 'User:' in column_map:
+                    sheet.update_cell(row_index, column_map['User:'], updated_data['user'])
+                if 'floor' in updated_data and 'Floor:' in column_map:
+                    sheet.update_cell(row_index, column_map['Floor:'], updated_data['floor'])
+                if 'room' in updated_data and 'Room:' in column_map:
+                    sheet.update_cell(row_index, column_map['Room:'], updated_data['room'])
+                if 'issue' in updated_data and 'Issue:' in column_map:
+                    sheet.update_cell(row_index, column_map['Issue:'], updated_data['issue'])
+                if 'responsible' in updated_data and 'Who is responsible?' in column_map:
+                    sheet.update_cell(row_index, column_map['Who is responsible?'], updated_data['responsible'])
+                # Handle photo URL updates if needed
+                if 'photo_urls' in updated_data and 'Upload photo:' in column_map:
+                    sheet.update_cell(row_index, column_map['Upload photo:'], updated_data['photo_urls'])
+                
+                return True
+        return False
+    except Exception as e:
+        print(f"Error updating OBS: {e}")
+        return False
+
+def debug_spreadsheet_data(project, obs_id):
+    """Debug function to see raw spreadsheet data"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        
+        # Get headers
+        headers = sheet.row_values(1)
+        
+        # Get all rows
+        rows = sheet.get_all_records()
+        
+        # Find the specific row
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project and str(row.get("OBS ID#", "")) == str(obs_id):
+                return {
+                    "headers": headers,
+                    "row_data": row,
+                    "photo_column_names": [h for h in headers if 'photo' in h.lower() or 'upload' in h.lower()],
+                    "photo_data": row.get("Upload photo:", "")
+                }
+        
+        return {"error": "Row not found", "headers": headers}
+    except Exception as e:
+        return {"error": str(e)}
+
+def get_oauth_drive_service():
+    """Get an authenticated Drive service using OAuth"""
+    creds = None
+    
+    # Load existing token
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, 'rb') as token:
+            creds = pickle.load(token)
+    
+    # If there are no (valid) credentials available, return None
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            return None  # Need to run OAuth flow
+    
+    # Save the credentials for the next run
+    with open(TOKEN_FILE, 'wb') as token:
+        pickle.dump(creds, token)
+    
+    return build('drive', 'v3', credentials=creds)
+
+def upload_photo_to_drive(file_data, filename, project, obs_id):
+    """Upload a photo using OAuth (user's Drive quota)"""
+    try:
+        service = get_oauth_drive_service()
+        if not service:
+            return None
+        
+        # Create a unique filename
+        timestamp = int(time.time())
+        unique_filename = f"{project}_{obs_id}_{timestamp}_{filename}"
+        
+        # Detect file type
+        mimetype = 'image/jpeg'
+        if filename.lower().endswith('.png'):
+            mimetype = 'image/png'
+        elif filename.lower().endswith('.gif'):
+            mimetype = 'image/gif'
+        elif filename.lower().endswith('.webp'):
+            mimetype = 'image/webp'
+        
+        # File metadata - use your original folder ID
+        file_metadata = {
+            'name': unique_filename,
+            'parents': ['1J0vCCtKs2nBvL0cZFuye_FtGKjk7ZkEFZwgqtaHtRx_ygPItIuz5eiegm_FyWvQl866QR-bC']
+        }
+        
+        # Create media upload
+        media = MediaIoBaseUpload(
+            io.BytesIO(file_data),
+            mimetype=mimetype,
+            resumable=True
+        )
+        
+        # Upload the file
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+        
+        file_id = file.get('id')
+        
+        # Make the file publicly viewable
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        service.permissions().create(
+            fileId=file_id,
+            body=permission
+        ).execute()
+        
+        # Return the shareable URL
+        shareable_url = f"https://drive.google.com/open?id={file_id}"
+        
+        print(f"Uploaded photo: {unique_filename} -> {shareable_url}")
+        return shareable_url
+        
+    except Exception as e:
+        print(f"Error uploading photo to Drive: {e}")
+        return None
+
+def add_photo_urls_to_obs(project, obs_id, new_photo_urls):
+    """Add new photo URLs to an existing OBS entry"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        
+        # Get header row to find the photo column
+        headers = sheet.row_values(1)
+        photo_column = None
+        for i, header in enumerate(headers):
+            if header == "Upload photo:":
+                photo_column = i + 1  # +1 because sheets are 1-indexed
+                break
+        
+        if not photo_column:
+            print("Photo column 'Upload photo:' not found in spreadsheet")
+            return False
+        
+        # Find the row to update
+        rows = sheet.get_all_records()
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project and str(row.get("OBS ID#", "")) == str(obs_id):
+                row_index = idx + 2  # +2 because sheets are 1-indexed and we skip header
+                
+                # Get existing photo URLs
+                existing_urls = row.get("Upload photo:", "")
+                
+                # Combine existing and new URLs
+                if existing_urls.strip():
+                    combined_urls = existing_urls + ", " + ", ".join(new_photo_urls)
+                else:
+                    combined_urls = ", ".join(new_photo_urls)
+                
+                # Update the cell
+                sheet.update_cell(row_index, photo_column, combined_urls)
+                
+                print(f"Updated photo URLs for OBS {obs_id}: {combined_urls}")
+                return True
+        
+        print(f"OBS {obs_id} not found for project {project}")
+        return False
+        
+    except Exception as e:
+        print(f"Error adding photo URLs to spreadsheet: {e}")
+        return False
+
+def remove_photo_url_from_obs(project, obs_id, photo_url_to_remove):
+    """Remove a specific photo URL from an OBS entry"""
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        
+        # Get header row to find the photo column
+        headers = sheet.row_values(1)
+        photo_column = None
+        for i, header in enumerate(headers):
+            if header == "Upload photo:":
+                photo_column = i + 1  # +1 because sheets are 1-indexed
+                break
+        
+        if not photo_column:
+            print("Photo column 'Upload photo:' not found in spreadsheet")
+            return False
+        
+        # Find the row to update
+        rows = sheet.get_all_records()
+        for idx, row in enumerate(rows):
+            if row.get("Project", "") == project and str(row.get("OBS ID#", "")) == str(obs_id):
+                row_index = idx + 2  # +2 because sheets are 1-indexed and we skip header
+                
+                # Get existing photo URLs
+                existing_urls = row.get("Upload photo:", "")
+                
+                # Parse and filter out the URL to remove
+                if existing_urls:
+                    url_list = [url.strip() for url in existing_urls.split(',') if url.strip()]
+                    filtered_urls = [url for url in url_list if url != photo_url_to_remove.strip()]
+                    
+                    # Update the cell with remaining URLs
+                    updated_urls = ', '.join(filtered_urls) if filtered_urls else ''
+                    sheet.update_cell(row_index, photo_column, updated_urls)
+                    
+                    print(f"Removed photo URL from OBS {obs_id}: {photo_url_to_remove}")
+                    return True
+                else:
+                    print(f"No photos found for OBS {obs_id}")
+                    return False
+        
+        print(f"OBS {obs_id} not found for project {project}")
+        return False
+        
+    except Exception as e:
+        print(f"Error removing photo URL from spreadsheet: {e}")
+        return False
+
+def delete_photo_from_drive(photo_url):
+    """Optionally delete photo from Google Drive (use with caution)"""
+    try:
+        # Extract file ID from URL
+        import re
+        file_id_match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', photo_url)
+        if not file_id_match:
+            print(f"Could not extract file ID from URL: {photo_url}")
+            return False
+        
+        file_id = file_id_match.group(1)
+        
+        # Use OAuth to delete (requires drive scope)
+        service = get_oauth_drive_service()
+        if not service:
+            print("Could not get OAuth Drive service")
+            return False
+        
+        service.files().delete(fileId=file_id).execute()
+        print(f"Deleted file from Drive: {file_id}")
+        return True
+        
+    except Exception as e:
+        print(f"Error deleting file from Drive: {e}")
+        return False
+
+def add_photos_to_pdf(pdf, photo_urls, page_width, margin):
+    """Add multiple photos to PDF with proper layout"""
+    if not photo_urls:
+        return
+    
+    # Parse photo URLs
+    urls = [url.strip() for url in photo_urls.split(',') if url.strip()]
+    if not urls:
+        return
+    
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Image
+    import requests
+    from io import BytesIO
+    import tempfile
+    import os
+    
+    # Calculate layout
+    photos_per_row = 2 if len(urls) > 1 else 1
+    photo_width = (page_width - 2 * margin - (photos_per_row - 1) * 0.25 * inch) / photos_per_row
+    photo_height = photo_width * 0.75  # 4:3 aspect ratio
+    
+    current_x = margin
+    current_y = pdf._y - photo_height - 0.25 * inch
+    
+    for i, url in enumerate(urls):
+        try:
+            # Convert Google Drive URL to downloadable format
+            if 'drive.google.com' in url:
+                # Extract file ID and create direct download URL
+                import re
+                file_id_match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
+                if file_id_match:
+                    file_id = file_id_match.group(1)
+                    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                else:
+                    print(f"Could not extract file ID from URL: {url}")
+                    continue
+            else:
+                download_url = url
+            
+            # Download the image
+            response = requests.get(download_url, timeout=30)
+            if response.status_code == 200:
+                # Create temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                    temp_file.write(response.content)
+                    temp_path = temp_file.name
+                
+                try:
+                    # Add image to PDF
+                    img = Image(temp_path, width=photo_width, height=photo_height)
+                    img.drawOn(pdf._doc, current_x, current_y)
+                    
+                    # Add photo caption
+                    pdf.setFont("Helvetica", 8)
+                    pdf.drawString(current_x, current_y - 15, f"Photo {i + 1}")
+                    
+                    # Update position for next photo
+                    if (i + 1) % photos_per_row == 0:
+                        # Move to next row
+                        current_x = margin
+                        current_y -= photo_height + 0.5 * inch
+                    else:
+                        # Move to next column
+                        current_x += photo_width + 0.25 * inch
+                    
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+            else:
+                print(f"Failed to download image from {download_url}: {response.status_code}")
+                
+        except Exception as e:
+            print(f"Error processing photo {url}: {e}")
+            continue
+    
+    # Update PDF y position
+    pdf._y = current_y - 0.25 * inch
+
+# Update your main PDF generation function to use this
+def generate_report_for_project(project):
+    """Generate PDF report with multiple photos per observation"""
+    try:
+        # ... your existing code to get data and create PDF ...
+        
+        # When processing each observation, update the photo handling:
+        for obs in observations:
+            # ... your existing observation processing code ...
+            
+            # Handle photos (replace your existing photo code with this)
+            photo_urls = obs.get('Upload photo:', '')
+            if photo_urls:
+                # Add some space before photos
+                pdf.ln(5)
+                pdf.cell(0, 6, "Photos:", ln=True)
+                pdf.ln(2)
+                
+                # Add all photos for this observation
+                add_photos_to_pdf(pdf, photo_urls, page_width, margin)
+                
+                # Add some space after photos
+                pdf.ln(10)
+        
+        # ... rest of your PDF generation code ...
+        
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        return None
 
 
 

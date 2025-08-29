@@ -238,6 +238,161 @@ def download_report(job_id):
     except Exception:
         return "Report not found or not ready.", 404
 
+@app.route('/edit_obs')
+def edit_obs():
+    projects = get_projects()
+    return render_template('edit_obs.html', projects=projects)
+
+@app.route('/get_obs_list')
+def get_obs_list():
+    project = request.args.get('project')
+    if not project or project not in get_projects():
+        return jsonify({"error": "Invalid or missing project"}), 400
+    
+    try:
+        from generate_pdf import get_obs_list_for_project
+        obs_list = get_obs_list_for_project(project)
+        return jsonify({"obs_list": obs_list})
+    except Exception as e:
+        print(f"Error getting OBS list: {e}")
+        return jsonify({"error": "Failed to get OBS list"}), 500
+
+@app.route('/get_obs_details')
+def get_obs_details():
+    project = request.args.get('project')
+    obs_id = request.args.get('obs_id')
+    if not project or project not in get_projects():
+        return jsonify({"error": "Invalid or missing project"}), 400
+    if not obs_id:
+        return jsonify({"error": "Missing OBS ID"}), 400
+    
+    try:
+        from generate_pdf import get_obs_details
+        details = get_obs_details(project, obs_id)
+        if details:
+            return jsonify(details)
+        else:
+            return jsonify({"error": "OBS not found"}), 404
+    except Exception as e:
+        print(f"Error getting OBS details: {e}")
+        return jsonify({"error": "Failed to get OBS details"}), 500
+
+@app.route('/update_obs', methods=['POST'])
+def update_obs():
+    data = request.json
+    project = data.get('project')
+    obs_id = data.get('obs_id')
+    
+    if not project or project not in get_projects():
+        return jsonify({"error": "Invalid or missing project"}), 400
+    if not obs_id:
+        return jsonify({"error": "Missing OBS ID"}), 400
+    
+    try:
+        from generate_pdf import update_obs_in_spreadsheet
+        success = update_obs_in_spreadsheet(project, obs_id, data)
+        if success:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"error": "Failed to update OBS"}), 500
+    except Exception as e:
+        print(f"Error updating OBS: {e}")
+        return jsonify({"error": "Failed to update OBS"}), 500
+
+@app.route('/upload_photos', methods=['POST'])
+def upload_photos():
+    """Handle photo uploads to Google Drive"""
+    try:
+        files = request.files.getlist('photos')
+        project = request.form.get('project')
+        obs_id = request.form.get('obs_id')
+        
+        if not files:
+            return jsonify({"error": "No files uploaded"}), 400
+        if not project or not obs_id:
+            return jsonify({"error": "Missing project or OBS ID"}), 400
+        
+        uploaded_urls = []
+        
+        # Upload each file to Google Drive
+        for file in files:
+            if file.filename == '':
+                continue
+                
+            # Read file data
+            file_data = file.read()
+            
+            # Upload to Google Drive
+            from generate_pdf import upload_photo_to_drive
+            url = upload_photo_to_drive(file_data, file.filename, project, obs_id)
+            
+            if url:
+                uploaded_urls.append(url)
+            else:
+                print(f"Failed to upload {file.filename}")
+        
+        if uploaded_urls:
+            # Add the new URLs to the spreadsheet
+            from generate_pdf import add_photo_urls_to_obs
+            success = add_photo_urls_to_obs(project, obs_id, uploaded_urls)
+            
+            if success:
+                return jsonify({
+                    "success": True,
+                    "message": f"Successfully uploaded {len(uploaded_urls)} photo(s)",
+                    "uploaded_urls": uploaded_urls
+                })
+            else:
+                return jsonify({"error": "Photos uploaded but failed to update spreadsheet"}), 500
+        else:
+            return jsonify({"error": "Failed to upload any photos"}), 500
+            
+    except Exception as e:
+        print(f"Error uploading photos: {e}")
+        return jsonify({"error": "Failed to upload photos"}), 500
+
+@app.route('/delete_photo', methods=['POST'])
+def delete_photo():
+    """Delete a photo from Google Drive and remove from spreadsheet"""
+    try:
+        data = request.json
+        project = data.get('project')
+        obs_id = data.get('obs_id')
+        photo_url = data.get('photo_url')
+        
+        if not project or not obs_id or not photo_url:
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        if project not in get_projects():
+            return jsonify({"error": "Invalid project"}), 400
+        
+        # Remove photo URL from spreadsheet
+        from generate_pdf import remove_photo_url_from_obs
+        success = remove_photo_url_from_obs(project, obs_id, photo_url)
+        
+        if success:
+            # Optionally delete from Google Drive (commented out for safety)
+            # from generate_pdf import delete_photo_from_drive
+            # delete_photo_from_drive(photo_url)
+            
+            return jsonify({"success": True})
+        else:
+            return jsonify({"error": "Failed to remove photo from spreadsheet"}), 500
+            
+    except Exception as e:
+        print(f"Error deleting photo: {e}")
+        return jsonify({"error": "Failed to delete photo"}), 500
+
+@app.route('/debug_obs/<project>/<obs_id>')
+def debug_obs(project, obs_id):
+    """Debug route to see raw spreadsheet data"""
+    try:
+        from generate_pdf import debug_spreadsheet_data
+        data = debug_spreadsheet_data(project, obs_id)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

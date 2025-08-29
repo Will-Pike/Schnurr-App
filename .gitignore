@@ -12,3 +12,6 @@ app_config.json
 .env
 schnurr-app.pem
 debug_*.html
+client_secret.json
+oauth_setup.py
+token.pickle
