@@ -624,36 +624,6 @@ def add_photos_to_pdf(pdf, photo_urls, page_width, margin):
     # Update PDF y position
     pdf._y = current_y - 0.25 * inch
 
-# Update your main PDF generation function to use this
-def generate_report_for_project(project):
-    """Generate PDF report with multiple photos per observation"""
-    try:
-        # ... your existing code to get data and create PDF ...
-        
-        # When processing each observation, update the photo handling:
-        for obs in observations:
-            # ... your existing observation processing code ...
-            
-            # Handle photos (replace your existing photo code with this)
-            photo_urls = obs.get('Upload photo:', '')
-            if photo_urls:
-                # Add some space before photos
-                pdf.ln(5)
-                pdf.cell(0, 6, "Photos:", ln=True)
-                pdf.ln(2)
-                
-                # Add all photos for this observation
-                add_photos_to_pdf(pdf, photo_urls, page_width, margin)
-                
-                # Add some space after photos
-                pdf.ln(10)
-        
-        # ... rest of your PDF generation code ...
-        
-    except Exception as e:
-        print(f"Error generating PDF: {e}")
-        return None
-
 
 
 
