@@ -37,7 +37,7 @@ SCOPES = ['https://www.googleapis.com/auth/drive.file']
 CLIENT_SECRETS_FILE = "client_secret.json"  # You'll need to create this
 TOKEN_FILE = "token.pickle"
 
-def generate_report_for_project(project):
+def generate_report_for_project(project, start_date=None, end_date=None):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
     client = gspread.authorize(creds)
@@ -50,11 +50,42 @@ def generate_report_for_project(project):
     pdf_files = []
 
     price_dict = load_price_dictionary()
+    
+    # Parse date range if provided
+    from datetime import datetime
+    start_dt = None
+    end_dt = None
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    if end_date:
+        # Set end date to end of day
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         for idx, row in enumerate(rows):
             if row.get("Project", "") != project:
                 continue
+            
+            # Filter by date range if provided
+            if start_dt or end_dt:
+                timestamp_str = row.get("Timestamp", "")
+                if timestamp_str:
+                    try:
+                        # Parse timestamp - adjust format as needed
+                        row_dt = datetime.strptime(timestamp_str, "%m/%d/%Y %H:%M:%S")
+                    except ValueError:
+                        try:
+                            # Try alternative format
+                            row_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        except ValueError:
+                            continue  # Skip rows with unparseable dates
+                    
+                    # Check if row is within date range
+                    if start_dt and row_dt < start_dt:
+                        continue
+                    if end_dt and row_dt > end_dt:
+                        continue
 
             issue_type = row.get("Issue:", "")
             cost = price_dict.get(issue_type, row.get("Estimated Cost", "N/A"))
@@ -69,8 +100,16 @@ def generate_report_for_project(project):
                 "description": issue_type,
                 "responsible": row.get("Who is responsible?", ""),
                 "cost": cost,
-                "photo_paths": []  # Changed to list for multiple photos
+                "photo_paths": [],  # Changed to list for multiple photos
+                "additional_fields": {}  # Store any additional form fields
             }
+            
+            # Capture all additional fields that aren't in the standard set
+            standard_fields = {"Project", "OBS ID#", "Timestamp", "Floor:", "Room:", "User:", 
+                             "Issue:", "Who is responsible?", "Upload photo:", "Estimated Cost"}
+            for key, value in row.items():
+                if key not in standard_fields and value:  # Only include non-empty additional fields
+                    record["additional_fields"][key] = value
 
             # Handle multiple photo URLs
             photo_urls = row.get("Upload photo:", "")
@@ -117,12 +156,13 @@ def generate_report_for_project(project):
         merger = PdfMerger()
         for pdf in pdf_files:
             merger.append(pdf)
-        combined_pdf = f"combined_report_{project.replace(' ', '_')}.pdf"
-        merger.write(combined_pdf)
+        
+        # Use absolute path in current directory for Windows compatibility
+        output_filename = f"report_{project.replace(' ', '_').replace('.', '')}.pdf"
+        output_path = os.path.abspath(output_filename)
+        
+        merger.write(output_path)
         merger.close()
-
-        output_path = f"/tmp/report_{project}.pdf"
-        shutil.move(combined_pdf, output_path)
 
         return output_path
 
@@ -137,6 +177,142 @@ def load_price_dictionary():
     # Build a dictionary: {issue_type: cost}
     price_dict = {row["Issue Type"]: row["Cost Estimate"] for row in rows}
     return price_dict
+
+def generate_csv_for_project(project, start_date=None, end_date=None):
+    """Generate CSV file for a project with optional date range"""
+    import csv
+    from datetime import datetime
+    
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+    
+    # Load price dictionary for cost lookup
+    price_dict = load_price_dictionary()
+    
+    # Get all rows and headers
+    all_data = sheet.get_all_values()
+    if not all_data:
+        raise ValueError(f"No data found for project: {project}")
+    
+    headers = all_data[0]
+    rows = all_data[1:]
+    
+    # Find project column index
+    try:
+        project_col_idx = headers.index("Project")
+    except ValueError:
+        raise ValueError("Project column not found in spreadsheet")
+    
+    # Find timestamp column index for date filtering
+    timestamp_col_idx = None
+    try:
+        timestamp_col_idx = headers.index("Timestamp")
+    except ValueError:
+        pass  # If no timestamp column, skip date filtering
+    
+    # Find issue type column index for cost lookup
+    issue_col_idx = None
+    try:
+        issue_col_idx = headers.index("Issue:")
+    except ValueError:
+        pass  # If no issue column, skip cost lookup
+    
+    # Check if Estimated Cost column already exists
+    cost_col_idx = None
+    try:
+        cost_col_idx = headers.index("Estimated Cost")
+    except ValueError:
+        # Add Estimated Cost column if it doesn't exist
+        headers = list(headers) + ["Estimated Cost"]
+    
+    # Parse date range if provided
+    start_dt = None
+    end_dt = None
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    if end_date:
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
+    
+    # Filter rows for this project and date range
+    filtered_rows = []
+    for row in rows:
+        if len(row) <= project_col_idx or row[project_col_idx] != project:
+            continue
+        
+        # Filter by date if timestamp column exists and date range provided
+        if timestamp_col_idx is not None and (start_dt or end_dt):
+            if len(row) > timestamp_col_idx and row[timestamp_col_idx]:
+                try:
+                    row_dt = datetime.strptime(row[timestamp_col_idx], "%m/%d/%Y %H:%M:%S")
+                except ValueError:
+                    try:
+                        row_dt = datetime.strptime(row[timestamp_col_idx], "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        continue  # Skip rows with unparseable dates
+                
+                if start_dt and row_dt < start_dt:
+                    continue
+                if end_dt and row_dt > end_dt:
+                    continue
+        
+        # Add or update estimated cost
+        row = list(row)  # Convert to list so we can modify it
+        
+        if cost_col_idx is None:
+            # Add new cost column
+            if issue_col_idx is not None and len(row) > issue_col_idx:
+                issue_type = row[issue_col_idx]
+                cost = price_dict.get(issue_type, "N/A")
+                row.append(str(cost))
+            else:
+                row.append("N/A")
+        else:
+            # Update existing cost column
+            if issue_col_idx is not None and len(row) > issue_col_idx:
+                issue_type = row[issue_col_idx]
+                cost = price_dict.get(issue_type, row[cost_col_idx] if len(row) > cost_col_idx else "N/A")
+                # Ensure row is long enough for cost column
+                while len(row) <= cost_col_idx:
+                    row.append("")
+                row[cost_col_idx] = str(cost)
+        
+        filtered_rows.append(row)
+    
+    if not filtered_rows:
+        raise FileNotFoundError(f"No records found for project: {project} in the specified date range")
+    
+    # Write CSV file
+    output_filename = f"report_{project.replace(' ', '_').replace('.', '')}.csv"
+    output_path = os.path.abspath(output_filename)
+    
+    with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)
+        writer.writerows(filtered_rows)
+    
+    return output_path
+
+def generate_both_reports(project, start_date, end_date):
+    """Generate both PDF and CSV reports for a project with date range"""
+    pdf_path = generate_report_for_project(project, start_date, end_date)
+    csv_path = generate_csv_for_project(project, start_date, end_date)
+    
+    return {
+        'pdf_path': pdf_path,
+        'csv_path': csv_path
+    }
+
+def get_all_issue_types():
+    """Get all issue types and their costs from the Patch Cost Estimates spreadsheet"""
+    try:
+        price_dict = load_price_dictionary()
+        return price_dict
+    except Exception as e:
+        print(f"Error getting issue types: {e}")
+        return {}
 
 def get_report_record_count(project):
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -249,7 +425,8 @@ def get_obs_details(project, obs_id):
                     photo_url = photo_url.replace('\n', ',').replace('\r', ',').replace(';', ',')
                     photo_url = photo_url.strip()
                 
-                return {
+                # Build the base response
+                response = {
                     "row_index": idx + 2,
                     "project": row.get("Project", ""),
                     "obs_id": row.get("OBS ID#", ""),
@@ -261,6 +438,15 @@ def get_obs_details(project, obs_id):
                     "responsible": row.get("Who is responsible?", ""),
                     "photo_url": photo_url
                 }
+                
+                # Add any additional fields dynamically
+                standard_fields = {"Project", "OBS ID#", "Timestamp", "Floor:", "Room:", "User:", 
+                                 "Issue:", "Who is responsible?", "Upload photo:", "Estimated Cost", "row_index"}
+                for key, value in row.items():
+                    if key not in standard_fields and value:
+                        response[key] = value
+                
+                return response
         return None
     except Exception as e:
         print(f"Error getting OBS details: {e}")

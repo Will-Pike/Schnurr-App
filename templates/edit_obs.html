@@ -102,16 +102,7 @@
           <div class="mb-3">
             <label for="editIssue" class="form-label">Issue:</label>
             <select class="form-select" id="editIssue" onchange="updateEstimatedCost()">
-              <option value="">Select issue type...</option>
-              <option value="Small Patch Tape and Float Only">Small Patch Tape and Float Only</option>
-              <option value="Small Patch Tape, Float and Paint">Small Patch Tape, Float and Paint</option>
-              <option value="Medium Patch Tape and Float Only">Medium Patch Tape and Float Only</option>
-              <option value="Medium Patch Tape, Float and Paint">Medium Patch Tape, Float and Paint</option>
-              <option value="Large Patch Tape and Float Only">Large Patch Tape and Float Only</option>
-              <option value="Large Patch Tape, Float and Paint">Large Patch Tape, Float and Paint</option>
-              <option value="Small Rework">Small Rework</option>
-              <option value="Medium Rework">Medium Rework</option>
-              <option value="Large Rework">Large Rework</option>
+              <option value="">Loading issue types...</option>
             </select>
           </div>
           
@@ -165,17 +156,37 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const costMapping = {
-  "Small Patch Tape and Float Only": "133",
-  "Small Patch Tape, Float and Paint": "167",
-  "Medium Patch Tape and Float Only": "202",
-  "Medium Patch Tape, Float and Paint": "217",
-  "Large Patch Tape and Float Only": "265",
-  "Large Patch Tape, Float and Paint": "317",
-  "Small Rework": "482",
-  "Medium Rework": "627",
-  "Large Rework": "772"
-};
+let costMapping = {};
+
+// Load issue types and costs when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  loadIssueTypes();
+});
+
+function loadIssueTypes() {
+  fetch('/get_issue_types')
+    .then(response => response.json())
+    .then(data => {
+      if (data.issue_types) {
+        costMapping = data.issue_types;
+        
+        // Populate the dropdown
+        const select = document.getElementById('editIssue');
+        select.innerHTML = '<option value="">Select issue type...</option>';
+        
+        for (const issueType in costMapping) {
+          const option = document.createElement('option');
+          option.value = issueType;
+          option.textContent = issueType;
+          select.appendChild(option);
+        }
+      }
+    })
+    .catch(error => {
+      console.error('Error loading issue types:', error);
+      document.getElementById('editIssue').innerHTML = '<option value="">Error loading issue types</option>';
+    });
+}
 
 // Emergency function to clear stuck backdrops
 function clearBackdrops() {

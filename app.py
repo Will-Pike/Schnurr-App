@@ -238,6 +238,77 @@ def download_report(job_id):
     except Exception:
         return "Report not found or not ready.", 404
 
+@app.route('/generate_reports', methods=['POST'])
+def generate_reports():
+    """Generate both PDF and CSV reports for a project with date range"""
+    data = request.json
+    project = data.get('project')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if not project or project not in get_projects():
+        return jsonify({"error": "Invalid or missing project"}), 400
+    if not start_date or not end_date:
+        return jsonify({"error": "Start and end dates are required"}), 400
+    
+    try:
+        job_id = str(uuid.uuid4())
+        job = task_queue.enqueue_call(
+            func='generate_pdf.generate_both_reports',
+            args=(project, start_date, end_date),
+            job_id=job_id,
+            timeout=600  # 10 minutes
+        )
+        return jsonify({"job_id": job_id}), 202
+    except Exception as e:
+        print(f"Error generating reports: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/reports_status/<job_id>')
+def reports_status(job_id):
+    """Check status of both PDF and CSV report generation"""
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+    except Exception:
+        return jsonify({"status": "not_found"}), 404
+
+    if job.is_finished:
+        result = job.result
+        return jsonify({
+            "status": "finished",
+            "pdf_url": f"/download_pdf_report/{job_id}",
+            "csv_url": f"/download_csv_report/{job_id}"
+        })
+    elif job.is_failed:
+        error_message = str(job.exc_info) if job.exc_info else "Unknown error"
+        return jsonify({"status": "failed", "error": error_message})
+    else:
+        return jsonify({"status": "in_progress"})
+
+@app.route('/download_pdf_report/<job_id>')
+def download_pdf_report(job_id):
+    """Download PDF report"""
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        result = job.result
+        pdf_path = result['pdf_path']
+        return send_file(pdf_path, as_attachment=True, download_name=os.path.basename(pdf_path))
+    except Exception as e:
+        print(f"Error downloading PDF: {e}")
+        return "PDF report not found or not ready.", 404
+
+@app.route('/download_csv_report/<job_id>')
+def download_csv_report(job_id):
+    """Download CSV report"""
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        result = job.result
+        csv_path = result['csv_path']
+        return send_file(csv_path, as_attachment=True, download_name=os.path.basename(csv_path))
+    except Exception as e:
+        print(f"Error downloading CSV: {e}")
+        return "CSV report not found or not ready.", 404
+
 @app.route('/edit_obs')
 def edit_obs():
     projects = get_projects()
@@ -392,6 +463,17 @@ def debug_obs(project, obs_id):
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)})
+
+@app.route('/get_issue_types')
+def get_issue_types():
+    """Get all issue types and their costs from the Patch Cost Estimates spreadsheet"""
+    try:
+        from generate_pdf import get_all_issue_types
+        issue_types = get_all_issue_types()
+        return jsonify({"issue_types": issue_types})
+    except Exception as e:
+        print(f"Error getting issue types: {e}")
+        return jsonify({"error": "Failed to load issue types"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

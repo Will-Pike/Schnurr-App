@@ -158,10 +158,29 @@
         <p>{{ record.responsible }}</p>
       </div>
 
+      {% if record.additional_fields %}
+      <table style="width:100%; border-collapse:collapse; margin:15px 0;">
+        <tr>
+          <td style="border:1px solid #dee2e6; background-color:#f8f9fa; padding:15px; width:65%; vertical-align:top;">
+            {% for field_name, field_value in record.additional_fields.items() %}
+            <div style="margin-bottom:{{ '0' if loop.last else '15px' }};">
+              <h5 style="margin:0 0 5px 0; font-weight:bold;">{{ field_name }}:</h5>
+              <p style="margin:0;">{{ field_value }}</p>
+            </div>
+            {% endfor %}
+          </td>
+          <td style="border:1px solid #dee2e6; background-color:#e9ecef; padding:15px; width:35%; vertical-align:top;">
+            <h5 style="margin:0 0 10px 0; font-weight:bold;">Estimated Cost:</h5>
+            <p style="margin:0; font-weight:bold;">${{ record.cost }}</p>
+          </td>
+        </tr>
+      </table>
+      {% else %}
       <div class="cost-box">
         <h5>Estimated Cost:</h5>
         <p>${{ record.cost }}</p>
       </div>
+      {% endif %}
 
       {% if record.photo_paths and record.photo_paths|length > 0 %}
       <div class="photos-section">
