@@ -142,13 +142,25 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                 f.write(html_content)
 
             output_file = os.path.join(temp_dir, f"report_{idx+1}.pdf")
-            pdfkit.from_string(
-                html_content, 
-                output_file, 
-                configuration=PDFKIT_CONFIG,
-                options={'enable-local-file-access': None}
-            )
-            pdf_files.append(output_file)
+            try:
+                pdfkit.from_string(
+                    html_content, 
+                    output_file, 
+                    configuration=PDFKIT_CONFIG,
+                    options={
+                        'enable-local-file-access': None,
+                        'quiet': ''  # Disable quiet mode to see actual errors
+                    }
+                )
+                pdf_files.append(output_file)
+            except OSError as e:
+                print(f"❌ PDF generation failed for OBS {record['obs_number']}: {e}")
+                # Save HTML for debugging
+                debug_html_path = f"debug_failed_{record['obs_number']}.html"
+                with open(debug_html_path, "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                print(f"   Debug HTML saved to: {debug_html_path}")
+                raise  # Re-raise to see full error
 
         if not pdf_files:
             raise FileNotFoundError(f"No records found for project: {project}")
