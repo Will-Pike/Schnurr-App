@@ -283,7 +283,17 @@ def reports_status(job_id):
         error_message = str(job.exc_info) if job.exc_info else "Unknown error"
         return jsonify({"status": "failed", "error": error_message})
     else:
-        return jsonify({"status": "in_progress"})
+        # Get progress information from job metadata
+        total = job.meta.get('total', 0)
+        processed = job.meta.get('processed', 0)
+        progress = int((processed / total * 100)) if total > 0 else 0
+        
+        return jsonify({
+            "status": "in_progress",
+            "progress": progress,
+            "processed": processed,
+            "total": total
+        })
 
 @app.route('/download_pdf_report/<job_id>')
 def download_pdf_report(job_id):

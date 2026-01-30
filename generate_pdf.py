@@ -7,6 +7,10 @@ import pdfkit
 from PyPDF2 import PdfMerger
 from jinja2 import Environment, FileSystemLoader
 from oauth2client.service_account import ServiceAccountCredentials
+try:
+    from rq import get_current_job
+except ImportError:
+    get_current_job = None
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.service_account import Credentials
@@ -28,6 +32,9 @@ WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
+
+# Debug mode - set to False in production to avoid filling disk
+DEBUG_HTML = os.getenv('DEBUG_HTML', 'False').lower() == 'true'
 
 # Google Drive folder ID where photos should be uploaded
 DRIVE_FOLDER_ID = "1J0vCCtKs2nBvL0cZFuye_FtGKjk7ZkEFZwgqtaHtRx_ygPItIuz5eiegm_FyWvQl866QR-bC"
@@ -62,31 +69,46 @@ def generate_report_for_project(project, start_date=None, end_date=None):
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         end_dt = end_dt.replace(hour=23, minute=59, second=59)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        for idx, row in enumerate(rows):
-            if row.get("Project", "") != project:
-                continue
-            
-            # Filter by date range if provided
-            if start_dt or end_dt:
-                timestamp_str = row.get("Timestamp", "")
-                if timestamp_str:
+    # Get current job for progress tracking
+    job = get_current_job() if get_current_job else None
+    
+    # First pass: count matching records for progress tracking
+    matching_rows = []
+    for row in rows:
+        if row.get("Project", "") != project:
+            continue
+        
+        # Filter by date range if provided
+        if start_dt or end_dt:
+            timestamp_str = row.get("Timestamp", "")
+            if timestamp_str:
+                try:
+                    row_dt = datetime.strptime(timestamp_str, "%m/%d/%Y %H:%M:%S")
+                except ValueError:
                     try:
-                        # Parse timestamp - adjust format as needed
-                        row_dt = datetime.strptime(timestamp_str, "%m/%d/%Y %H:%M:%S")
+                        row_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
                     except ValueError:
-                        try:
-                            # Try alternative format
-                            row_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                        except ValueError:
-                            continue  # Skip rows with unparseable dates
-                    
-                    # Check if row is within date range
-                    if start_dt and row_dt < start_dt:
                         continue
-                    if end_dt and row_dt > end_dt:
-                        continue
+                
+                if start_dt and row_dt < start_dt:
+                    continue
+                if end_dt and row_dt > end_dt:
+                    continue
+        
+        matching_rows.append(row)
+    
+    total_records = len(matching_rows)
+    if total_records == 0:
+        raise FileNotFoundError(f"No records found for project: {project}")
+    
+    # Update job metadata with total count
+    if job:
+        job.meta['total'] = total_records
+        job.meta['processed'] = 0
+        job.save_meta()
 
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for idx, row in enumerate(matching_rows):
             issue_type = row.get("Issue:", "")
             cost = price_dict.get(issue_type, row.get("Estimated Cost", "N/A"))
 
@@ -137,9 +159,10 @@ def generate_report_for_project(project, start_date=None, end_date=None):
             
             html_content = template.render(records=[record])
             
-            # Debug HTML
-            with open(f"debug_{idx+1}.html", "w", encoding="utf-8") as f:
-                f.write(html_content)
+            # Debug HTML (only in debug mode)
+            if DEBUG_HTML:
+                with open(f"debug_{idx+1}.html", "w", encoding="utf-8") as f:
+                    f.write(html_content)
 
             output_file = os.path.join(temp_dir, f"report_{idx+1}.pdf")
             try:
@@ -153,6 +176,12 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                     }
                 )
                 pdf_files.append(output_file)
+                
+                # Update progress
+                if job:
+                    job.meta['processed'] = idx + 1
+                    job.save_meta()
+                    print(f"Progress: {idx + 1}/{total_records} PDFs generated")
             except OSError as e:
                 print(f"❌ PDF generation failed for OBS {record['obs_number']}: {e}")
                 # Save HTML for debugging
@@ -161,9 +190,6 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                     f.write(html_content)
                 print(f"   Debug HTML saved to: {debug_html_path}")
                 raise  # Re-raise to see full error
-
-        if not pdf_files:
-            raise FileNotFoundError(f"No records found for project: {project}")
 
         merger = PdfMerger()
         for pdf in pdf_files:
