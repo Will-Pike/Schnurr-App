@@ -105,6 +105,8 @@ def generate_report_for_project(project, start_date=None, end_date=None):
     if job:
         job.meta['total'] = total_records
         job.meta['processed'] = 0
+        job.meta['status'] = 'generating_pdfs'
+        job.meta['last_updated'] = time.time()
         job.save_meta()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -180,6 +182,7 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                 # Update progress
                 if job:
                     job.meta['processed'] = idx + 1
+                    job.meta['last_updated'] = time.time()  # Add timestamp for heartbeat
                     job.save_meta()
                     print(f"Progress: {idx + 1}/{total_records} PDFs generated")
             except OSError as e:
@@ -193,30 +196,76 @@ def generate_report_for_project(project, start_date=None, end_date=None):
 
         print(f"📄 Merging {len(pdf_files)} PDFs into final report...")
         
+        # Update job status to merging
+        if job:
+            job.meta['status'] = 'merging_pdfs'
+            job.meta['last_updated'] = time.time()
+            job.save_meta()
+        
         # Use absolute path in current directory for Windows compatibility
         output_filename = f"report_{project.replace(' ', '_').replace('.', '')}.pdf"
         output_path = os.path.abspath(output_filename)
         
-        merger = PdfMerger()
-        try:
-            for idx, pdf in enumerate(pdf_files):
-                try:
-                    merger.append(pdf)
-                    # Log progress every 50 PDFs to show merge is progressing
-                    if (idx + 1) % 50 == 0:
-                        print(f"   Merged {idx + 1}/{len(pdf_files)} PDFs...")
-                except Exception as e:
-                    print(f"⚠️  Warning: Failed to merge PDF {idx + 1}: {e}")
-                    continue
+        # For large reports (>100 PDFs), use batch merging to avoid memory issues
+        if len(pdf_files) > 100:
+            print(f"   Using batch merge strategy for {len(pdf_files)} PDFs...")
+            batch_size = 50
+            temp_merged_files = []
             
-            print(f"✍️  Writing final PDF to {output_filename}...")
-            merger.write(output_path)
-            print(f"✅ Report generation complete: {output_path}")
-        except Exception as e:
-            print(f"❌ Error during PDF merge: {e}")
-            raise
-        finally:
-            merger.close()
+            # Merge in batches
+            for batch_idx in range(0, len(pdf_files), batch_size):
+                batch = pdf_files[batch_idx:batch_idx + batch_size]
+                batch_merger = PdfMerger()
+                
+                try:
+                    for pdf in batch:
+                        batch_merger.append(pdf)
+                    
+                    # Write batch to temp file
+                    batch_output = os.path.join(temp_dir, f"batch_{batch_idx // batch_size}.pdf")
+                    batch_merger.write(batch_output)
+                    temp_merged_files.append(batch_output)
+                    print(f"   Merged batch {batch_idx // batch_size + 1}/{(len(pdf_files) + batch_size - 1) // batch_size}")
+                finally:
+                    batch_merger.close()
+            
+            # Final merge of batches
+            print(f"   Combining {len(temp_merged_files)} batches into final report...")
+            final_merger = PdfMerger()
+            try:
+                for temp_file in temp_merged_files:
+                    final_merger.append(temp_file)
+                
+                print(f"✍️  Writing final PDF to {output_filename}...")
+                final_merger.write(output_path)
+                print(f"✅ Report generation complete: {output_path}")
+            except Exception as e:
+                print(f"❌ Error during final batch merge: {e}")
+                raise
+            finally:
+                final_merger.close()
+        else:
+            # For smaller reports, use direct merge
+            merger = PdfMerger()
+            try:
+                for idx, pdf in enumerate(pdf_files):
+                    try:
+                        merger.append(pdf)
+                        # Log progress every 50 PDFs to show merge is progressing
+                        if (idx + 1) % 50 == 0:
+                            print(f"   Merged {idx + 1}/{len(pdf_files)} PDFs...")
+                    except Exception as e:
+                        print(f"⚠️  Warning: Failed to merge PDF {idx + 1}: {e}")
+                        continue
+                
+                print(f"✍️  Writing final PDF to {output_filename}...")
+                merger.write(output_path)
+                print(f"✅ Report generation complete: {output_path}")
+            except Exception as e:
+                print(f"❌ Error during PDF merge: {e}")
+                raise
+            finally:
+                merger.close()
 
         return output_path
 

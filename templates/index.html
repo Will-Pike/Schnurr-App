@@ -396,7 +396,13 @@ function pollReportsStatus(job_id) {
           clearInterval(progressInterval); // Stop fake progress
           progress = data.progress;
           updateProgressBar();
-          document.getElementById('reportStatus').textContent = `Processing reports... (${data.processed || 0}/${data.total || 0})`;
+          
+          // Show different message based on phase
+          if (data.phase === 'merging_pdfs') {
+            document.getElementById('reportStatus').textContent = `Merging PDFs into final report... (${data.processed}/${data.total} processed)`;
+          } else {
+            document.getElementById('reportStatus').textContent = `Processing reports... (${data.processed || 0}/${data.total || 0})`;
+          }
         } else {
           document.getElementById('reportStatus').textContent = "Processing reports...";
         }

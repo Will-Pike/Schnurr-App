@@ -286,13 +286,19 @@ def reports_status(job_id):
         # Get progress information from job metadata
         total = job.meta.get('total', 0)
         processed = job.meta.get('processed', 0)
+        status = job.meta.get('status', 'in_progress')
         progress = int((processed / total * 100)) if total > 0 else 0
+        
+        # If merging PDFs, show 99% to indicate almost done
+        if status == 'merging_pdfs':
+            progress = 99
         
         return jsonify({
             "status": "in_progress",
             "progress": progress,
             "processed": processed,
-            "total": total
+            "total": total,
+            "phase": status
         })
 
 @app.route('/download_pdf_report/<job_id>')
