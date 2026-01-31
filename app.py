@@ -185,7 +185,7 @@ def generate_report():
             func='generate_pdf.generate_report_for_project',
             args=(project,),
             job_id=job_id,
-            timeout=600  # 10 minutes
+            timeout=1800  # 30 minutes (for large reports with 200+ PDFs)
         )
         return jsonify({"job_id": job_id}), 202
     except Exception as e:
@@ -257,7 +257,7 @@ def generate_reports():
             func='generate_pdf.generate_both_reports',
             args=(project, start_date, end_date),
             job_id=job_id,
-            timeout=600  # 10 minutes
+            timeout=1800  # 30 minutes (for large reports with 200+ PDFs)
         )
         return jsonify({"job_id": job_id}), 202
     except Exception as e:

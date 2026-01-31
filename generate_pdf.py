@@ -191,16 +191,32 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                 print(f"   Debug HTML saved to: {debug_html_path}")
                 raise  # Re-raise to see full error
 
-        merger = PdfMerger()
-        for pdf in pdf_files:
-            merger.append(pdf)
+        print(f"📄 Merging {len(pdf_files)} PDFs into final report...")
         
         # Use absolute path in current directory for Windows compatibility
         output_filename = f"report_{project.replace(' ', '_').replace('.', '')}.pdf"
         output_path = os.path.abspath(output_filename)
         
-        merger.write(output_path)
-        merger.close()
+        merger = PdfMerger()
+        try:
+            for idx, pdf in enumerate(pdf_files):
+                try:
+                    merger.append(pdf)
+                    # Log progress every 50 PDFs to show merge is progressing
+                    if (idx + 1) % 50 == 0:
+                        print(f"   Merged {idx + 1}/{len(pdf_files)} PDFs...")
+                except Exception as e:
+                    print(f"⚠️  Warning: Failed to merge PDF {idx + 1}: {e}")
+                    continue
+            
+            print(f"✍️  Writing final PDF to {output_filename}...")
+            merger.write(output_path)
+            print(f"✅ Report generation complete: {output_path}")
+        except Exception as e:
+            print(f"❌ Error during PDF merge: {e}")
+            raise
+        finally:
+            merger.close()
 
         return output_path
 

@@ -390,6 +390,17 @@ function pollReportsStatus(job_id) {
       } else if (data.status === "failed") {
         document.getElementById('reportStatus').textContent = "Report generation failed: " + (data.error || "Unknown error");
         document.getElementById('progressContainer').style.display = 'none';
+      } else if (data.status === "in_progress") {
+        // Use real progress if available
+        if (data.progress !== undefined) {
+          clearInterval(progressInterval); // Stop fake progress
+          progress = data.progress;
+          updateProgressBar();
+          document.getElementById('reportStatus').textContent = `Processing reports... (${data.processed || 0}/${data.total || 0})`;
+        } else {
+          document.getElementById('reportStatus').textContent = "Processing reports...";
+        }
+        setTimeout(() => pollReportsStatus(job_id), 1000); // Poll every second for smoother updates
       } else {
         document.getElementById('reportStatus').textContent = "Processing reports...";
         setTimeout(() => pollReportsStatus(job_id), 2000);
