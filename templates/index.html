@@ -64,7 +64,7 @@
       
       <!-- Download Section (hidden by default) -->
       <div id="downloadSection" style="display:none; margin-top:20px;">
-        <div class="alert alert-success" role="alert">
+        <div id="downloadMessage" class="alert alert-success" role="alert">
           Reports are ready for download!
         </div>
         <a href="#" id="downloadPdfBtn" class="btn btn-primary" style="display:block !important; width:100% !important; margin-bottom:15px !important;" download>Download PDF Report</a>
@@ -385,11 +385,19 @@ function pollReportsStatus(job_id) {
         
         // Show download section
         document.getElementById('downloadSection').style.display = 'block';
+        document.getElementById('downloadMessage').textContent = "Reports are ready for download!";
         document.getElementById('downloadPdfBtn').href = data.pdf_url;
         document.getElementById('downloadCsvBtn').href = data.csv_url;
+        document.getElementById('downloadPdfBtn').style.display = 'block';
       } else if (data.status === "failed") {
         document.getElementById('reportStatus').textContent = "Report generation failed: " + (data.error || "Unknown error");
         document.getElementById('progressContainer').style.display = 'none';
+        if (data.csv_url) {
+          document.getElementById('downloadSection').style.display = 'block';
+          document.getElementById('downloadMessage').textContent = "PDF failed, but the spreadsheet is ready to download.";
+          document.getElementById('downloadPdfBtn').style.display = 'none';
+          document.getElementById('downloadCsvBtn').href = data.csv_url;
+        }
       } else if (data.status === "in_progress") {
         // Use real progress if available
         if (data.progress !== undefined) {
@@ -405,6 +413,12 @@ function pollReportsStatus(job_id) {
           }
         } else {
           document.getElementById('reportStatus').textContent = "Processing reports...";
+        }
+        if (data.csv_url) {
+          document.getElementById('downloadSection').style.display = 'block';
+          document.getElementById('downloadMessage').textContent = "Spreadsheet is ready. PDF is still processing.";
+          document.getElementById('downloadPdfBtn').style.display = 'none';
+          document.getElementById('downloadCsvBtn').href = data.csv_url;
         }
         setTimeout(() => pollReportsStatus(job_id), 1000); // Poll every second for smoother updates
       } else {

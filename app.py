@@ -12,6 +12,7 @@ import platform
 app = Flask(__name__)
 
 CONFIG_FILE = 'app_config.json'
+REPORT_JOB_TIMEOUT = int(os.environ.get('REPORT_JOB_TIMEOUT', '7200'))
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -185,7 +186,7 @@ def generate_report():
             func='generate_pdf.generate_report_for_project',
             args=(project,),
             job_id=job_id,
-            timeout=1800  # 30 minutes (for large reports with 200+ PDFs)
+            timeout=REPORT_JOB_TIMEOUT
         )
         return jsonify({"job_id": job_id}), 202
     except Exception as e:
@@ -257,7 +258,7 @@ def generate_reports():
             func='generate_pdf.generate_both_reports',
             args=(project, start_date, end_date),
             job_id=job_id,
-            timeout=1800  # 30 minutes (for large reports with 200+ PDFs)
+            timeout=REPORT_JOB_TIMEOUT
         )
         return jsonify({"job_id": job_id}), 202
     except Exception as e:
@@ -272,6 +273,9 @@ def reports_status(job_id):
     except Exception:
         return jsonify({"status": "not_found"}), 404
 
+    csv_path = job.meta.get('csv_path') if job.meta else None
+    csv_url = f"/download_csv_report/{job_id}" if csv_path else None
+
     if job.is_finished:
         result = job.result
         return jsonify({
@@ -281,7 +285,7 @@ def reports_status(job_id):
         })
     elif job.is_failed:
         error_message = str(job.exc_info) if job.exc_info else "Unknown error"
-        return jsonify({"status": "failed", "error": error_message})
+        return jsonify({"status": "failed", "error": error_message, "csv_url": csv_url})
     else:
         # Get progress information from job metadata
         total = job.meta.get('total', 0)
@@ -298,7 +302,8 @@ def reports_status(job_id):
             "progress": progress,
             "processed": processed,
             "total": total,
-            "phase": status
+            "phase": status,
+            "csv_url": csv_url
         })
 
 @app.route('/download_pdf_report/<job_id>')
@@ -318,8 +323,12 @@ def download_csv_report(job_id):
     """Download CSV report"""
     try:
         job = Job.fetch(job_id, connection=redis_conn)
-        result = job.result
-        csv_path = result['csv_path']
+        if job.is_finished and job.result:
+            csv_path = job.result['csv_path']
+        else:
+            csv_path = job.meta.get('csv_path')
+        if not csv_path:
+            return "CSV report not found or not ready.", 404
         return send_file(csv_path, as_attachment=True, download_name=os.path.basename(csv_path))
     except Exception as e:
         print(f"Error downloading CSV: {e}")

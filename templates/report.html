@@ -28,9 +28,9 @@
       color: #6c757d;
     }
     .issue-box, .cost-box {
-      padding: 15px;
+      padding: 10px;
       border-radius: 5px;
-      margin: 15px 0;
+      margin: 10px 0;
       border: 1px solid #dee2e6;
       font-weight: bold;
     }
@@ -41,6 +41,14 @@
     .cost-box {
       background-color: #e9ecef;
       font-weight: bold;
+    }
+    .issue-box h5, .cost-box h5 {
+      font-size: 0.95rem;
+      margin: 0 0 6px 0;
+    }
+    .issue-box p, .cost-box p {
+      font-size: 0.9rem;
+      margin: 0;
     }
     @media print {
       body {
@@ -107,8 +115,8 @@
     
     .photo-container p {
       text-align: center;
-      font-size: 12px;
-      margin: 8px 0;
+      font-size: 10px;
+      margin: 6px 0;
       font-weight: bold;
       color: #666;
     }
@@ -124,23 +132,23 @@
           <span>{{ record.project }}</span>
         </div>
 
-        <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+        <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
           <tr>
-            <td style="border:1px solid #dee2e6; padding:12px; width:50%;">
+            <td style="border:1px solid #dee2e6; padding:8px; width:50%;">
               <strong>OBS #</strong><br>
               {{ record.obs_number }}
             </td>
-            <td style="border:1px solid #dee2e6; padding:12px; width:50%; text-align:right;">
+            <td style="border:1px solid #dee2e6; padding:8px; width:50%; text-align:right;">
               <strong>Date/Time:</strong><br>
               {{ record.date }}
             </td>
           </tr>
           <tr>
-            <td style="border:1px solid #dee2e6; padding:12px;">
+            <td style="border:1px solid #dee2e6; padding:8px;">
               <strong>Floor/Room:</strong><br>
               {{ record.floor }}{% if record.floor and record.room %}, {% endif %}{{ record.room }}
             </td>
-            <td style="border:1px solid #dee2e6; padding:12px; text-align:right;">
+            <td style="border:1px solid #dee2e6; padding:8px; text-align:right;">
               <strong>Reported by:</strong><br>
               {{ record.user }}
             </td>
@@ -159,19 +167,19 @@
       </div>
 
       {% if record.additional_fields %}
-      <table style="width:100%; border-collapse:collapse; margin:15px 0;">
+      <table style="width:100%; border-collapse:collapse; margin:10px 0;">
         <tr>
-          <td style="border:1px solid #dee2e6; background-color:#f8f9fa; padding:15px; width:65%; vertical-align:top;">
+          <td style="border:1px solid #dee2e6; background-color:#f8f9fa; padding:10px; width:65%; vertical-align:top;">
             {% for field_name, field_value in record.additional_fields.items() %}
-            <div style="margin-bottom:{{ '0' if loop.last else '15px' }};">
-              <h5 style="margin:0 0 5px 0; font-weight:bold;">{{ field_name }}:</h5>
-              <p style="margin:0;">{{ field_value }}</p>
+            <div style="margin-bottom:{{ '0' if loop.last else '10px' }};">
+              <h5 style="margin:0 0 4px 0; font-weight:bold; font-size:0.95rem;">{{ field_name }}:</h5>
+              <p style="margin:0; font-size:0.9rem;">{{ field_value }}</p>
             </div>
             {% endfor %}
           </td>
-          <td style="border:1px solid #dee2e6; background-color:#e9ecef; padding:15px; width:35%; vertical-align:top;">
-            <h5 style="margin:0 0 10px 0; font-weight:bold;">Estimated Cost:</h5>
-            <p style="margin:0; font-weight:bold;">${{ record.cost }}</p>
+          <td style="border:1px solid #dee2e6; background-color:#e9ecef; padding:10px; width:35%; vertical-align:top;">
+            <h5 style="margin:0 0 6px 0; font-weight:bold; font-size:0.95rem;">Estimated Cost:</h5>
+            <p style="margin:0; font-weight:bold; font-size:0.9rem;">${{ record.cost }}</p>
           </td>
         </tr>
       </table>
@@ -184,7 +192,6 @@
 
       {% if record.photo_paths and record.photo_paths|length > 0 %}
       <div class="photos-section">
-        <h4>Photos ({{ record.photo_paths|length }}):</h4>
         <div class="photo-grid {% if record.photo_paths|length == 1 %}single-photo{% elif record.photo_paths|length == 2 %}two-photos{% else %}multiple-photos{% endif %}">
           {% for photo_path in record.photo_paths %}
           <div class="photo-container">

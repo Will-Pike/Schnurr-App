@@ -1,9 +1,11 @@
 import os
+import platform
 import shutil
 import tempfile
 import requests
 import gspread
 import pdfkit
+from PIL import Image, ImageFile
 from PyPDF2 import PdfMerger
 from jinja2 import Environment, FileSystemLoader
 from oauth2client.service_account import ServiceAccountCredentials
@@ -25,16 +27,39 @@ import io
 from googleapiclient.http import MediaIoBaseUpload
 import time
 
-# Uncomment this line for Linux or MacOS local environment:
-WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
-# For Windows local environment, use the following line instead:
-# WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
+if platform.system().lower().startswith("win"):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+env_wkhtmltopdf = os.environ.get("WKHTMLTOPDF_PATH")
+if env_wkhtmltopdf:
+    WKHTMLTOPDF_PATH = env_wkhtmltopdf
+elif platform.system().lower().startswith("win"):
+    WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
+else:
+    WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
+PDFKIT_OPTIONS = {
+    'enable-local-file-access': None,
+    'quiet': '',
+    'disable-smart-shrinking': '',
+    'no-stop-slow-scripts': ''
+}
 
 # Debug mode - set to False in production to avoid filling disk
 DEBUG_HTML = os.getenv('DEBUG_HTML', 'False').lower() == 'true'
+
+IMAGE_MAX_DIM = int(os.getenv('REPORT_IMAGE_MAX_DIM', '1600'))
+IMAGE_JPEG_QUALITY = int(os.getenv('REPORT_IMAGE_JPEG_QUALITY', '75'))
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+def compress_image(image_path):
+    with Image.open(image_path) as img:
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        img.thumbnail((IMAGE_MAX_DIM, IMAGE_MAX_DIM), Image.LANCZOS)
+        img.save(image_path, format="JPEG", quality=IMAGE_JPEG_QUALITY, optimize=True)
 
 # Google Drive folder ID where photos should be uploaded
 DRIVE_FOLDER_ID = "1J0vCCtKs2nBvL0cZFuye_FtGKjk7ZkEFZwgqtaHtRx_ygPItIuz5eiegm_FyWvQl866QR-bC"
@@ -151,6 +176,11 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                             temp_img_path = os.path.join(temp_dir, f"photo_{idx+1}_{photo_idx+1}.jpg")
                             with open(temp_img_path, 'wb') as f:
                                 shutil.copyfileobj(response.raw, f)
+
+                            try:
+                                compress_image(temp_img_path)
+                            except Exception as e:
+                                print(f"⚠️ Image compression failed for OBS {record['obs_number']}, photo {photo_idx+1}: {e}")
                             
                             # Add the file path to the list
                             record["photo_paths"].append(f"file:///{temp_img_path.replace(os.sep, '/')}")
@@ -169,13 +199,10 @@ def generate_report_for_project(project, start_date=None, end_date=None):
             output_file = os.path.join(temp_dir, f"report_{idx+1}.pdf")
             try:
                 pdfkit.from_string(
-                    html_content, 
-                    output_file, 
+                    html_content,
+                    output_file,
                     configuration=PDFKIT_CONFIG,
-                    options={
-                        'enable-local-file-access': None,
-                        'quiet': ''  # Disable quiet mode to see actual errors
-                    }
+                    options=PDFKIT_OPTIONS
                 )
                 pdf_files.append(output_file)
                 
@@ -400,8 +427,22 @@ def generate_csv_for_project(project, start_date=None, end_date=None):
 
 def generate_both_reports(project, start_date, end_date):
     """Generate both PDF and CSV reports for a project with date range"""
-    pdf_path = generate_report_for_project(project, start_date, end_date)
+    job = get_current_job() if get_current_job else None
+
+    if job:
+        job.meta['status'] = 'generating_csv'
+        job.meta['last_updated'] = time.time()
+        job.save_meta()
+
     csv_path = generate_csv_for_project(project, start_date, end_date)
+
+    if job:
+        job.meta['csv_path'] = csv_path
+        job.meta['status'] = 'generating_pdfs'
+        job.meta['last_updated'] = time.time()
+        job.save_meta()
+
+    pdf_path = generate_report_for_project(project, start_date, end_date)
     
     return {
         'pdf_path': pdf_path,
