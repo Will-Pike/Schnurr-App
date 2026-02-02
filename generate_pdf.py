@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import requests
 import gspread
-import pdfkit
+from weasyprint import HTML
 from PIL import Image, ImageFile
 from PyPDF2 import PdfMerger
 from jinja2 import Environment, FileSystemLoader
@@ -27,29 +27,8 @@ import io
 from googleapiclient.http import MediaIoBaseUpload
 import time
 
-if platform.system().lower().startswith("win"):
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-env_wkhtmltopdf = os.environ.get("WKHTMLTOPDF_PATH")
-if env_wkhtmltopdf:
-    WKHTMLTOPDF_PATH = env_wkhtmltopdf
-elif platform.system().lower().startswith("win"):
-    WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
-else:
-    detected_wkhtmltopdf = shutil.which("wkhtmltopdf")
-    if detected_wkhtmltopdf:
-        WKHTMLTOPDF_PATH = detected_wkhtmltopdf
-    else:
-        WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
-PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
-PDFKIT_OPTIONS = {
-    'enable-local-file-access': None,
-    'quiet': '',
-    'disable-smart-shrinking': '',
-    'no-stop-slow-scripts': ''
-}
 
 # Debug mode - set to False in production to avoid filling disk
 DEBUG_HTML = os.getenv('DEBUG_HTML', 'False').lower() == 'true'
@@ -202,12 +181,7 @@ def generate_report_for_project(project, start_date=None, end_date=None):
 
             output_file = os.path.join(temp_dir, f"report_{idx+1}.pdf")
             try:
-                pdfkit.from_string(
-                    html_content,
-                    output_file,
-                    configuration=PDFKIT_CONFIG,
-                    options=PDFKIT_OPTIONS
-                )
+                HTML(string=html_content, base_url=".").write_pdf(output_file)
                 pdf_files.append(output_file)
                 
                 # Update progress
