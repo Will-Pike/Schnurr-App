@@ -36,7 +36,11 @@ if env_wkhtmltopdf:
 elif platform.system().lower().startswith("win"):
     WKHTMLTOPDF_PATH = "C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe"
 else:
-    WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
+    detected_wkhtmltopdf = shutil.which("wkhtmltopdf")
+    if detected_wkhtmltopdf:
+        WKHTMLTOPDF_PATH = detected_wkhtmltopdf
+    else:
+        WKHTMLTOPDF_PATH = "/usr/bin/wkhtmltopdf"
 SERVICE_FILE = "./service-account.json"
 SPREADSHEET_ID = "16xuo0Uuyku5qD5Ul6VDO86I3rVSFzUedgVXMKfUv5CE"
 PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
