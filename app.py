@@ -273,7 +273,14 @@ def reports_status(job_id):
     except Exception:
         return jsonify({"status": "not_found"}), 404
 
-    csv_path = job.meta.get('csv_path') if job.meta else None
+    # Refresh job/meta to avoid stale progress in Redis
+    try:
+        job.refresh()
+        meta = job.get_meta(refresh=True)
+    except Exception:
+        meta = job.meta or {}
+
+    csv_path = meta.get('csv_path')
     csv_url = f"/download_csv_report/{job_id}" if csv_path else None
 
     if job.is_finished:
@@ -288,9 +295,9 @@ def reports_status(job_id):
         return jsonify({"status": "failed", "error": error_message, "csv_url": csv_url})
     else:
         # Get progress information from job metadata
-        total = job.meta.get('total', 0)
-        processed = job.meta.get('processed', 0)
-        status = job.meta.get('status', 'in_progress')
+        total = meta.get('total', 0)
+        processed = meta.get('processed', 0)
+        status = meta.get('status', 'in_progress')
         progress = int((processed / total * 100)) if total > 0 else 0
         
         # If merging PDFs, show 99% to indicate almost done
