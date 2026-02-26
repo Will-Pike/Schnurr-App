@@ -75,14 +75,21 @@ def generate_report_for_project(project, start_date=None, end_date=None):
     print(f"[SCHNURR-DEBUG] Total rows from sheet: {len(rows)}", flush=True)
     if rows:
         print(f"[SCHNURR-DEBUG] First row keys: {list(rows[0].keys())}", flush=True)
-        print(f"[SCHNURR-DEBUG] Looking for project: '{project}'", flush=True)
-        # Show a sample of project values in the sheet
-        project_values = set()
-        for row in rows[:20]:  # Check first 20 rows
+        print(f"[SCHNURR-DEBUG] Looking for project: '{project}' (len={len(project)}, repr={repr(project)})", flush=True)
+        # Show ALL project values in the sheet (not just first 20)
+        project_values = {}
+        for idx, row in enumerate(rows):
             project_val = row.get("Project", "")
             if project_val:
-                project_values.add(project_val)
-        print(f"[SCHNURR-DEBUG] Sample project values in sheet: {project_values}", flush=True)
+                if project_val not in project_values:
+                    project_values[project_val] = 0
+                project_values[project_val] += 1
+        print(f"[SCHNURR-DEBUG] ALL unique project values in sheet: {project_values}", flush=True)
+        
+        # Check for exact match details
+        for project_val, count in project_values.items():
+            matches = project_val == project
+            print(f"[SCHNURR-DEBUG] Project '{project_val}' (len={len(project_val)}, count={count}): matches='{matches}'", flush=True)
     
     # Parse date range if provided
     from datetime import datetime
