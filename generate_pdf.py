@@ -8,6 +8,11 @@ from weasyprint import HTML
 from PIL import Image, ImageFile
 from PyPDF2 import PdfMerger
 from jinja2 import Environment, FileSystemLoader
+import logging
+
+# Configure logging for debugging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 from oauth2client.service_account import ServiceAccountCredentials
 try:
     from rq import get_current_job
@@ -119,6 +124,7 @@ def generate_report_for_project(project, start_date=None, end_date=None):
         matching_rows.append(row)
     
     total_records = len(matching_rows)
+    logger.info(f"Matching records found: {total_records} (project: '{project}')")
     if total_records == 0:
         raise FileNotFoundError(f"No records found for project: {project}")
     
