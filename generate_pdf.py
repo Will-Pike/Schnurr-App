@@ -136,6 +136,14 @@ def generate_report_for_project(project, start_date=None, end_date=None):
         matching_rows.append(row)
     
     total_records = len(matching_rows)
+    
+    with open(debug_file, "a") as df:
+        df.write(f"Matching records after date filtering: {total_records}\n")
+        if start_date or end_date:
+            df.write(f"Date range: {start_date} to {end_date}\n")
+        if total_records == 0:
+            df.write(f"ERROR: No matching records found!\n")
+    
     logger.info(f"Matching records found: {total_records} (project: '{project}')")
     print(f"[SCHNURR-DEBUG] Matching records found: {total_records} (project: '{project}')", flush=True)
     if total_records == 0:
