@@ -58,11 +58,19 @@ CLIENT_SECRETS_FILE = "client_secret.json"  # You'll need to create this
 TOKEN_FILE = "token.pickle"
 
 def generate_report_for_project(project, start_date=None, end_date=None):
+    # Write debug to a file that we can check
+    debug_file = "/tmp/schnurr_debug.log"
+    
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_FILE, scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(SPREADSHEET_ID).sheet1
     rows = sheet.get_all_records()
+
+    with open(debug_file, "a") as df:
+        df.write(f"\n=== REPORT GENERATION START ===\n")
+        df.write(f"Total rows from sheet: {len(rows)}\n")
+        df.write(f"Project requested: '{project}' (len={len(project)})\n")
 
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template("report.html")
@@ -71,12 +79,8 @@ def generate_report_for_project(project, start_date=None, end_date=None):
 
     price_dict = load_price_dictionary()
     
-    # DEBUG: Log what we're getting from the sheet
-    print(f"[SCHNURR-DEBUG] Total rows from sheet: {len(rows)}", flush=True)
     if rows:
-        print(f"[SCHNURR-DEBUG] First row keys: {list(rows[0].keys())}", flush=True)
-        print(f"[SCHNURR-DEBUG] Looking for project: '{project}' (len={len(project)}, repr={repr(project)})", flush=True)
-        # Show ALL project values in the sheet (not just first 20)
+        # Show ALL project values in the sheet
         project_values = {}
         for idx, row in enumerate(rows):
             project_val = row.get("Project", "")
@@ -84,12 +88,13 @@ def generate_report_for_project(project, start_date=None, end_date=None):
                 if project_val not in project_values:
                     project_values[project_val] = 0
                 project_values[project_val] += 1
-        print(f"[SCHNURR-DEBUG] ALL unique project values in sheet: {project_values}", flush=True)
         
-        # Check for exact match details
-        for project_val, count in project_values.items():
-            matches = project_val == project
-            print(f"[SCHNURR-DEBUG] Project '{project_val}' (len={len(project_val)}, count={count}): matches='{matches}'", flush=True)
+        with open(debug_file, "a") as df:
+            df.write(f"All unique projects in sheet: {project_values}\n")
+            # Check for exact match details
+            for project_val, count in project_values.items():
+                matches = project_val == project
+                df.write(f"  Project '{project_val}' (len={len(project_val)}, count={count}): matches='{matches}'\n")
     
     # Parse date range if provided
     from datetime import datetime
