@@ -445,22 +445,49 @@ def generate_csv_for_project(project, start_date=None, end_date=None):
 
 def generate_both_reports(project, start_date, end_date):
     """Generate both PDF and CSV reports for a project with date range"""
+    debug_file = "/tmp/schnurr_debug.log"
+    
+    with open(debug_file, "a") as df:
+        df.write(f"\n=== GENERATE_BOTH_REPORTS CALLED ===\n")
+        df.write(f"Project: {project}, Start: {start_date}, End: {end_date}\n")
+    
     job = get_current_job() if get_current_job else None
 
     if job:
         job.meta['status'] = 'generating_csv'
         job.meta['last_updated'] = time.time()
         job.save_meta()
+        with open(debug_file, "a") as df:
+            df.write(f"Job metadata set: status=generating_csv\n")
 
-    csv_path = generate_csv_for_project(project, start_date, end_date)
+    try:
+        csv_path = generate_csv_for_project(project, start_date, end_date)
+        with open(debug_file, "a") as df:
+            df.write(f"CSV generated successfully: {csv_path}\n")
+    except Exception as e:
+        with open(debug_file, "a") as df:
+            df.write(f"CSV generation FAILED: {type(e).__name__}: {e}\n")
+        raise
 
     if job:
         job.meta['csv_path'] = csv_path
         job.meta['status'] = 'generating_pdfs'
         job.meta['last_updated'] = time.time()
         job.save_meta()
+        with open(debug_file, "a") as df:
+            df.write(f"Job metadata set: status=generating_pdfs\n")
 
-    pdf_path = generate_report_for_project(project, start_date, end_date)
+    try:
+        pdf_path = generate_report_for_project(project, start_date, end_date)
+        with open(debug_file, "a") as df:
+            df.write(f"PDF generated successfully: {pdf_path}\n")
+    except Exception as e:
+        with open(debug_file, "a") as df:
+            df.write(f"PDF generation FAILED: {type(e).__name__}: {e}\n")
+        raise
+    
+    with open(debug_file, "a") as df:
+        df.write(f"=== GENERATE_BOTH_REPORTS COMPLETED ===\n")
     
     return {
         'pdf_path': pdf_path,
