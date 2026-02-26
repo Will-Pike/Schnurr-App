@@ -1,6 +1,7 @@
 import os
 import redis
-from rq import Worker, Queue
+from rq import Worker, Queue, SimpleWorker
+from rq.timeouts import TimerDeathPenalty
 import logging
 
 # Configure logging
@@ -17,5 +18,8 @@ conn = redis.from_url(redis_url)
 
 if __name__ == '__main__':
     logger.info("Starting RQ worker...")
-    worker = Worker(listen, connection=conn)
+    worker_cls = SimpleWorker if os.name == 'nt' else Worker
+    worker = worker_cls(listen, connection=conn)
+    if os.name == 'nt':
+        worker.death_penalty_class = TimerDeathPenalty
     worker.work(logging_level='INFO')

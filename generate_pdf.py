@@ -66,6 +66,19 @@ def generate_report_for_project(project, start_date=None, end_date=None):
 
     price_dict = load_price_dictionary()
     
+    # DEBUG: Log what we're getting from the sheet
+    print(f"[DEBUG] Total rows from sheet: {len(rows)}")
+    if rows:
+        print(f"[DEBUG] First row keys: {list(rows[0].keys())}")
+        print(f"[DEBUG] Looking for project: '{project}'")
+        # Show a sample of project values in the sheet
+        project_values = set()
+        for row in rows[:20]:  # Check first 20 rows
+            project_val = row.get("Project", "")
+            if project_val:
+                project_values.add(project_val)
+        print(f"[DEBUG] Sample project values in sheet: {project_values}")
+    
     # Parse date range if provided
     from datetime import datetime
     start_dt = None
