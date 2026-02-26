@@ -454,11 +454,14 @@ def generate_both_reports(project, start_date, end_date):
     job = get_current_job() if get_current_job else None
 
     if job:
+        # Initialize metadata with placeholders so UI doesn't show 0/0
         job.meta['status'] = 'generating_csv'
+        job.meta['total'] = 1  # Placeholder, will be updated during PDF generation
+        job.meta['processed'] = 0
         job.meta['last_updated'] = time.time()
         job.save_meta()
         with open(debug_file, "a") as df:
-            df.write(f"Job metadata set: status=generating_csv\n")
+            df.write(f"Job metadata initialized: status=generating_csv, total=1, processed=0\n")
 
     try:
         csv_path = generate_csv_for_project(project, start_date, end_date)
