@@ -51,7 +51,7 @@
     <div class="card-body">
       <div class="mb-3">
         <label for="projectSelect" class="form-label">Select Project:</label>
-        <select id="projectSelect" class="form-select" onchange="updateOBSDisplay()"></select>
+        <select id="projectSelect" class="form-select" onchange="onProjectChange()"></select>
       </div>
 
       <div class="obs-text">Next OBS Number:</div>
@@ -161,6 +161,24 @@ function loadProjects() {
           updateOBSDisplay();
         });
     });
+}
+
+// Projects that live in a separate companion app. Selecting one of these
+// in the dropdown redirects the user to that app instead of loading OBS data.
+const EXTERNAL_PROJECT_URLS = {
+  '1. TFC': 'https://tfc.schnurr-app.com'
+};
+
+// Called when the user changes the project dropdown. Programmatic updates on
+// page load call updateOBSDisplay() directly, so they will not trigger a redirect.
+function onProjectChange() {
+  const project = document.getElementById('projectSelect').value;
+  const externalUrl = EXTERNAL_PROJECT_URLS[project];
+  if (externalUrl) {
+    window.location.href = externalUrl;
+    return;
+  }
+  updateOBSDisplay();
 }
 
 // Modify the updateOBSDisplay function to get last row data
